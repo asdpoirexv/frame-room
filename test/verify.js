@@ -2391,6 +2391,24 @@ section('Self re-authentication');
       ok('preview mode counts as an unvalued discount', /if \(previewMode\) reasons\.push/.test(est));
   ok('off-peak counts as an unvalued discount', /if \(offPeak\) reasons\.push/.test(est));
 
+  // Credit ledger. What a rejected submit costs is not knowable from outside —
+  // observed as charged for i2i and inconsistent for frames — so it is measured
+  // per job instead of argued about.
+  const runFn = extractFn('run');
+  ok('the balance is read before submitting', /record\.creditsBefore = await creditsSnapshot/.test(runFn));
+  ok('and again once the submit is accepted', /record\.creditsAfterSubmit = await creditsSnapshot/.test(runFn));
+  ok('a failed submit is measured too', /record\.creditsAtFailure = await creditsSnapshot/.test(runFn));
+  ok('and a final reading at settle', /record\.creditsFinal = await creditsSnapshot/.test(runFn));
+  // The delta is meaningless if another job on the same account moved the
+  // balance, so attributability is recorded rather than assumed.
+  ok('contention is recorded, not ignored', /record\.soloAtStart = runningFor\(record\.account\)/.test(runFn));
+  // Bookkeeping must never be able to fail a job.
+  const snap = extractFn('creditsSnapshot');
+  ok('a credits read never throws', /catch \{\s*return null;\s*\}/.test(snap));
+  // auth is declared inside the try; catch and finally need it too.
+  ok('auth is hoisted for the catch and finally paths', /let auth0 = null;/.test(runFn));
+  ok('and assigned once readAuth resolves', /auth0 = auth;/.test(runFn));
+
   // Off-peak. PixVerse's own CLI exposes `--off-peak` ("lower credit cost"), and
   // `off_peak` was already plumbed through the frames payload and pinned to 0 —
   // the wire was complete and the switch welded shut.

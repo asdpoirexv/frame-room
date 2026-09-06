@@ -33,7 +33,7 @@ prompts, URLs, emails and ids, cannot appear in the output. The guarantee is a
 whitelist in `safe()`, not a redaction pass, so it can be read and checked
 rather than trusted.
 
-Run `node test/verify.js` after changing `background.js` — 614 checks against
+Run `node test/verify.js` after changing `background.js` — 622 checks against
 real captured API requests, no dependencies. (It said 92 for a long time; the
 number had simply stopped being maintained.) The suite parses every shipped file
 whole before testing any of its parts, because it works by extracting named

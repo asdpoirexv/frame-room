@@ -2931,6 +2931,11 @@ async function run({ record, job }) {
   const tab = OUTPUT[job.mode]; // 'image' | 'video'
   runningJobIds.add(record.id);
 
+  // Hoisted: the credit ledger reads it from catch and finally, and a job that
+  // fails before readAuth() resolves must still settle cleanly rather than
+  // throwing a ReferenceError over the top of the real error.
+  let auth0 = null;
+
   try {
     // Pin the account for this job's entire lifetime, right now. Everything
     // below — the snapshot, the generate call, and up to 25 minutes of polling —
@@ -2938,6 +2943,7 @@ async function run({ record, job }) {
     // under different accounts at once: switch accounts and submit again, and
     // the first job keeps polling its own library instead of following you.
     const auth = await readAuth();
+    auth0 = auth;
 
     record.state = 'running';
     record.startedAt = Date.now();
@@ -2983,6 +2989,26 @@ async function run({ record, job }) {
     record.pollUntil = Date.now() + (job.mode === 'image' ? 5 * 60_000 : 25 * 60_000);
     await saveJob(record);
 
+    // CREDIT LEDGER. Read the balance immediately before submitting and again
+    // once the job settles, so what a generation actually cost becomes a
+    // measurement rather than a guess.
+    //
+    // It exists because the cost of a REJECTED submit is genuinely unclear from
+    // the outside: observed as charged for i2i, and sometimes charged and
+    // sometimes not for frames. Nobody is going to work that out by watching the
+    // number by hand across a handful of tries; a few dozen real jobs with the
+    // parameters recorded alongside will show it.
+    //
+    // The delta is NOISY and is recorded, never trusted. The balance also moves
+    // for the daily refresh and for anything generated in another tab or by
+    // another job on the same account. `soloAtStart` marks whether this job had
+    // the account to itself at submit, which is the only condition under which
+    // the delta is attributable to it — analysis filters on that rather than
+    // pretending the number is clean.
+    record.creditsBefore = await creditsSnapshot(auth);
+    record.soloAtStart = runningFor(record.account) <= 1;
+    await saveJob(record);
+
     if (job.mode === 'image') {
       await generateImage(job.params, auth);
     } else if (job.mode === 'animate') {
@@ -2990,6 +3016,12 @@ async function run({ record, job }) {
     } else {
       await generateFrames(job.params, auth);
     }
+
+    // Straight after the submit is accepted, before any polling. A submit that
+    // throws skips this and is measured in the catch instead, which is exactly
+    // the case in question.
+    record.creditsAfterSubmit = await creditsSnapshot(auth);
+    await saveJob(record);
 
     // Videos can sit in a queue before rendering even starts, so the window has
     // to be generous. Chrome can terminate the worker during a wait this long;
@@ -3014,11 +3046,28 @@ async function run({ record, job }) {
   } catch (err) {
     record.state = 'failed';
     record.error = friendly(err);
+    // The interesting measurement. A submit rejected on content grounds lands
+    // here, and whether the balance moved is the whole question.
+    record.creditsAtFailure = await creditsSnapshot(auth0);
   } finally {
     runningJobIds.delete(record.id);
   }
 
+  record.creditsFinal = await creditsSnapshot(auth0);
+  record.settledAt = Date.now();
   await saveJob(record);
+}
+
+// Balance, or null. Never throws and never blocks a job: a job must not fail
+// because bookkeeping did.
+async function creditsSnapshot(auth) {
+  try {
+    const r = await apiFetch('/user/credits', null, 'GET', auth ?? null);
+    const total = (r?.credit_daily ?? 0) + (r?.credit_monthly ?? 0) + (r?.credit_package ?? 0);
+    return Number.isFinite(total) ? total : null;
+  } catch {
+    return null;
+  }
 }
 
 function friendly(err) {

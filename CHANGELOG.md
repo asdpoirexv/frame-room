@@ -9,6 +9,38 @@ would be worse than leaving them blank.
 the fact, in two sittings rather than as each change landed, and the times were
 not recorded. Inventing them would break the rule directly above.
 
+## 0.66.0 — 2026-09-06
+
+**Every job now records what it actually cost.**
+
+The cost of a rejected submit is not knowable from outside. Observed: i2i
+appears to charge, frames sometimes charges and sometimes does not, and watching
+the balance by hand across a few attempts cannot separate that from the daily
+refresh or from another job on the same account. So `run()` reads the balance
+immediately before submitting, again once the submit is accepted, at failure,
+and at settle.
+
+**The delta is recorded, never trusted.** The balance moves for reasons
+unrelated to any one job, so `soloAtStart` records whether the account was idle
+at submit time. `tools/credit-ledger.js` reports only those as attributable and
+says plainly how many were excluded. A confident average over contaminated
+samples would be worse than no number at all.
+
+`creditsSnapshot()` returns null rather than throwing: bookkeeping must never be
+the reason a generation fails.
+
+Also fixes a scope bug introduced with it — `auth` is declared inside the try,
+so the catch and finally paths would have thrown a ReferenceError over the top
+of the real error. Hoisted.
+
+**`tools/flag-probe.js`** identifies which library field marks an asset as
+policy-flagged. NOTES 1.14m narrowed it to `media_locked`, `is_hidden` or
+`block_remake` but could not choose, because the accounts holding flagged assets
+are private. The probe runs locally and prints only fields whose values differ,
+with output whitelisted to booleans, nulls and small numbers — strings are
+reported as their type, so prompts, urls and account details cannot appear. The
+guarantee is readable in `safe()` rather than asserted in a comment.
+
 ## 0.65.0 — 2026-09-06
 
 **Off-peak is now a toggle, and multi-shot is finally visible.**
