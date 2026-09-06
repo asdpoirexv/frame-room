@@ -1,0 +1,31 @@
+{
+  "_note": "A transition (first+last frame) record whose url is a PLACEHOLDER and video_path is empty, with video_status 7 — yet the webp-derived mp4 was confirmed downloadable. This single record disproves both the url field and the status enum as existence signals. Account email domain replaced with example.com before publishing; nothing else altered.",
+  "account_id": 414234249394133,
+  "create_mode": "transition",
+  "created_at": "2026-07-18T16:33:45Z",
+  "customer_paths": {
+    "customer_first_frame": "pixverse/i2i/ori/b73b87bb-7fea-4426-b864-ce688664e0d0.jpg",
+    "customer_first_frame_url": "https://media.pixverse.ai/pixverse%2Fi2i%2Fori%2Fb73b87bb-7fea-4426-b864-ce688664e0d0.jpg",
+    "customer_img_paths": [
+      "pixverse/i2i/ori/b73b87bb-7fea-4426-b864-ce688664e0d0.jpg",
+      "pixverse/i2i/ori/6ea8c6f5-a18a-4bd2-a826-c2e786bb85af.jpg"
+    ],
+    "customer_last_frame": "pixverse/i2i/ori/6ea8c6f5-a18a-4bd2-a826-c2e786bb85af.jpg",
+    "durations": [10],
+    "prompts": ["she smiles"]
+  },
+  "duration": 10,
+  "email": "asdpoirexv.185@example.com",
+  "first_frame": "https://media.pixverse.ai/pixverse%2Fjpg%2Fmedia%2Fdefault.jpg",
+  "model": "v6",
+  "multi_shot": 0,
+  "nick_name": "asdpoirexv185",
+  "prompt": "she smiles",
+  "quality": "1080p",
+  "seed": 1457752098,
+  "url": "https://media.pixverse.ai/pixverse-preview%2Fmp4%2Fmedia%2Fdefault.mp4",
+  "video_path": "",
+  "video_status": 7,
+  "webp_url": "https://media.pixverse.ai/pixverse%2Fwebp%2Fmedia%2Fweb%2Faec861a5-1de0-4486-9a6f-5b7bd6d5a8f0_seed1457752098.webp",
+  "_confirmed_working_mp4": "https://media.pixverse.ai/pixverse/mp4/media/web/ori/aec861a5-1de0-4486-9a6f-5b7bd6d5a8f0_seed1457752098.mp4"
+}

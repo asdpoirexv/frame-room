@@ -1,0 +1,40 @@
+# Credentials. Never, under any circumstances.
+test.cred
+*.cred
+*.pem
+*.key
+
+# The archive export. Five megabytes of JSON that changes every time you sweep,
+# so git would store a fresh copy of the whole thing on every commit. It is also
+# the most personal file here: four thousand records carrying your prompts, your
+# account names and your email addresses.
+#
+# It is still the one irreplaceable thing in this folder. Git is the wrong place
+# for it; back it up separately.
+merged.json
+*-export.json
+
+# Network captures. A HAR of a signed-in session is a credential file: it holds
+# your JWT, your cookies, and after an upload an Aliyun AccessKeySecret.
+*.har
+capture/
+
+# har-ingest sample output. Redacted by default, but it is generated, and a
+# --secrets run is not redacted at all.
+samples/
+
+# Loose images. Test uploads and whatever else lands here. The extension ships
+# no images of its own, so nothing here is needed to load it.
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.mp4
+
+node_modules/
+.DS_Store
+Thumbs.db
+
+# Claude Code's per-machine permission grants. The `.local` suffix is the
+# convention for exactly this: it describes this machine, not this project.
+.claude/settings.local.json

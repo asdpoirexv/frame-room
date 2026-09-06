@@ -1,0 +1,22 @@
+{
+  "_note": "The failure this whole change exists for. A generated image whose image_url AND image_path both came back EMPTY on a later listing, with image_status 7 — the user reports the URL was present during the generation phase and gone afterwards, with no discernible pattern. Dropping these lost the generation entirely. Account email domain replaced with example.com before publishing; nothing else altered.",
+  "asset_id": 415063160447546,
+  "image_id": 415063160447546,
+  "asset_source": 1,
+  "asset_type": 0,
+  "create_mode": "create_image",
+  "creation_type": 21,
+  "customer_img_paths": ["upload/61f12c2f-2070-4187-a4a9-a4058e47d1a2.png"],
+  "customer_img_urls": ["https://media.pixverse.ai/upload%2F61f12c2f-2070-4187-a4a9-a4058e47d1a2.png"],
+  "image_path": "",
+  "image_url": "",
+  "image_status": 7,
+  "model": "qwen-image",
+  "prompt": "she is smiling",
+  "quality": "1080p",
+  "aspect_ratio": "4:5",
+  "seed": 2046142479,
+  "nick_name": "asdpoirexv185",
+  "email": "asdpoirexv.185@example.com",
+  "created_at": "2026-07-23T06:58:33Z"
+}

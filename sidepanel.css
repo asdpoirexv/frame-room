@@ -1,0 +1,685 @@
+/* Frame Room — a colour-suite readout, not a SaaS dashboard.
+   The panel sits beside a bright web app, so it goes dark and lets the
+   renders be the only luminous thing. Every number is monospace: seeds,
+   durations, ids and timecode are the vocabulary of this tool. */
+
+:root {
+  --ink:    #0F1219;
+  --ink-2:  #161A23;
+  --line:   #252B37;
+  --fog:    #8A93A6;
+  --paper:  #E4E9F2;
+  --amber:  #E8A33D;
+  --alarm:  #E0574E;
+
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --gap: 12px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: var(--ink);
+  color: var(--paper);
+  font: 13px/1.45 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.label {
+  font: 10px/1 var(--mono);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--fog);
+}
+
+/* ---- header ---- */
+
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px var(--gap);
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.version {
+  font: 10px/1 var(--mono);
+  letter-spacing: .08em;
+  color: var(--fog);
+}
+
+.wordmark {
+  margin: 0;
+  font: 600 13px/1 var(--mono);
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+.wordmark span { color: var(--fog); }
+
+.link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--fog);
+  font: 10px/1 var(--mono);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.link:hover { color: var(--paper); }
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--fog);
+}
+.dot.is-live  { background: var(--amber); }
+.dot.is-dead  { background: var(--alarm); }
+
+/* ---- credit bar ---- */
+
+.creditbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 6px var(--gap);
+  border-bottom: 1px solid var(--line);
+}
+
+.credit-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  font: 10px/1 var(--mono);
+  letter-spacing: .08em;
+  color: var(--fog);
+  cursor: default;
+}
+.credit-mark { color: var(--amber); }
+#credit-total {
+  font-size: 12px;
+  color: var(--paper);
+  letter-spacing: .02em;
+}
+.credit-word { text-transform: uppercase; }
+.credit-chip.is-low #credit-total { color: var(--alarm); }
+
+/* ---- mode switch ---- */
+.modes {
+  display: flex;
+  border-bottom: 1px solid var(--line);
+}
+
+.mode {
+  flex: 1;
+  padding: 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--fog);
+  font: 11px/1 var(--mono);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.mode.is-on {
+  color: var(--paper);
+  border-bottom-color: var(--amber);
+}
+
+/* ---- deck ---- */
+
+.deck {
+  display: grid;
+  gap: var(--gap);
+  padding: var(--gap);
+}
+
+.slots {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: var(--gap);
+}
+
+.slot {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  display: grid;
+  place-content: center;
+  gap: 4px;
+  padding: 0;
+  border: 1px dashed var(--line);
+  border-radius: 2px;
+  background: var(--ink-2) center / cover no-repeat;
+  color: var(--fog);
+  cursor: pointer;
+}
+.slot:hover { border-color: var(--amber); color: var(--paper); }
+.slot.is-set { border-style: solid; border-color: var(--line); }
+.slot.is-set .slot-hint { display: none; }
+
+.slot-key {
+  font: 10px/1 var(--mono);
+  letter-spacing: .1em;
+  color: var(--amber);
+}
+.slot-hint { font-size: 11px; }
+
+.field { display: grid; gap: 5px; }
+
+textarea,
+input,
+select {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--ink-2);
+  color: var(--paper);
+  font: 12px/1.4 var(--sans);
+  resize: vertical;
+}
+input,
+select { font-family: var(--mono); }
+
+textarea:focus,
+input:focus,
+select:focus,
+button:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 1px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--gap);
+}
+.grid .seed { grid-column: 1 / -1; }
+
+.toggles {
+  display: flex;
+  gap: var(--gap);
+}
+
+.toggle {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--ink-2);
+  color: var(--fog);
+  font-family: var(--mono);
+  cursor: pointer;
+}
+.toggle[aria-pressed="true"] {
+  border-color: var(--amber);
+  color: var(--paper);
+}
+.toggle-key {
+  font-size: 10px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.toggle-state {
+  font-size: 10px;
+  letter-spacing: .1em;
+  color: var(--fog);
+}
+.toggle[aria-pressed="true"] .toggle-state { color: var(--amber); }
+
+.seed-row { display: flex; gap: 6px; }
+
+.reroll,
+.ghost {
+  flex: 0 0 auto;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--ink-2);
+  color: var(--fog);
+  font-family: var(--mono);
+  cursor: pointer;
+}
+.reroll:hover,
+.ghost:hover { color: var(--amber); border-color: var(--amber); }
+
+/* ---- the readout ---- */
+
+.readout {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--amber);
+  border-radius: 2px;
+  background: var(--ink-2);
+  color: var(--fog);
+  font: 11px/1.3 var(--mono);
+  letter-spacing: .04em;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.readout.is-running { color: var(--paper); }
+.readout.is-bad { border-left-color: var(--alarm); color: var(--alarm); }
+
+.pip {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--line);
+}
+.readout.is-running .pip {
+  background: var(--amber);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+.readout.is-bad .pip { background: var(--alarm); }
+
+@keyframes pulse {
+  50% { opacity: .25; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .readout.is-running .pip { animation: none; }
+}
+
+.go {
+  padding: 12px;
+  border: 0;
+  border-radius: 2px;
+  background: var(--amber);
+  color: #1A1204;
+  font: 600 12px/1 var(--mono);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+/* The credit cost, inside the Generate button. Lighter than the label: it is
+   information about the action, not a second action. Empty when the estimate
+   cannot be computed, so the button simply reads "Generate" as it always did. */
+.go-cost {
+  opacity: .75;
+  font-variant-numeric: tabular-nums;
+}
+
+.go:hover { filter: brightness(1.08); }
+.go:disabled { opacity: .35; cursor: not-allowed; }
+
+/* ---- renders ---- */
+
+.renders {
+  padding: var(--gap);
+  border-top: 1px solid var(--line);
+}
+.renders .label { display: block; margin-bottom: 8px; }
+
+.reel {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.reel .empty {
+  grid-column: 1 / -1;
+  color: var(--fog);
+  font-size: 12px;
+}
+.reel img,
+.reel video {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  object-fit: cover;
+  background: var(--ink-2);
+}
+
+.tile {
+  display: grid;
+  gap: 4px;
+}
+
+.reel video.is-broken {
+  opacity: .25; /* couldn't paint — but the URL controls below stay usable */
+}
+
+.browse {
+  width: 100%;
+  margin-top: 10px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--ink-2);
+  color: var(--fog);
+  font: 10px/1 var(--mono);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.browse:hover { color: var(--amber); border-color: var(--amber); }
+
+.acct {
+  position: relative;
+}
+
+.caret {
+  margin-left: 4px;
+  font-size: 8px;
+  color: var(--fog);
+}
+
+.acct-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  min-width: 220px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--ink-2);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .5);
+}
+
+.acct-loading,
+.acct-empty {
+  padding: 10px;
+  font: 10px/1.4 var(--mono);
+  color: var(--fog);
+}
+
+.acct-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--paper);
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+  text-align: left;
+}
+.acct-row:hover { background: rgba(255, 255, 255, .04); }
+
+.acct-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--line);
+  flex: 0 0 auto;
+}
+.acct-row.is-current .acct-dot { background: var(--amber); }
+
+.acct-name { flex: 1; }
+.acct-row.is-current .acct-name { color: var(--amber); }
+
+.acct-meta {
+  font-size: 9px;
+  color: var(--fog);
+  letter-spacing: .06em;
+}
+
+/* An account that can renew itself. Amber matches the "linked" dot in the
+   header, so the same colour means the same thing throughout: credentials are
+   live and working. */
+.acct-meta.acct-renewable { color: var(--amber); }
+
+.acct-key {
+  font-size: 12px;
+  color: var(--fog);
+  padding: 0 4px;
+  border-radius: 2px;
+  opacity: .5;
+}
+.acct-key:hover { color: var(--amber); opacity: 1; }
+.acct-key.is-on { color: var(--amber); opacity: 1; }
+
+.acct-forget {
+  font-size: 13px;
+  color: var(--fog);
+  padding: 0 4px;
+  border-radius: 2px;
+}
+.acct-forget:hover { color: var(--alarm); }
+
+/* Password entry, inline under its account row. */
+.acct-pwform {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 10px 10px;
+  background: rgba(255, 255, 255, .03);
+  border-left: 2px solid var(--amber);
+}
+
+/* Deliberately not styled as a dismissible aside. This is the one control in
+   the panel that trades a permanent secret for convenience, and the warning
+   should be as loud as the thing it warns about. */
+.acct-pwwarn {
+  font-size: 9px;
+  line-height: 1.45;
+  color: var(--alarm);
+  letter-spacing: .02em;
+}
+
+.acct-pwinput {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 11px;
+  padding: 5px 7px;
+  color: inherit;
+  background: rgba(0, 0, 0, .35);
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 3px;
+}
+.acct-pwinput:focus { outline: none; border-color: var(--amber); }
+
+.acct-pwgo {
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: .06em;
+  padding: 5px 8px;
+  color: inherit;
+  background: rgba(255, 255, 255, .06);
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.acct-pwgo:hover:not(:disabled) { color: var(--amber); border-color: var(--amber); }
+.acct-pwgo:disabled { opacity: .5; cursor: default; }
+
+.acct-pwmsg {
+  font-size: 9px;
+  color: var(--fog);
+  letter-spacing: .04em;
+}
+.acct-pwmsg.is-bad { color: var(--alarm); }
+
+.acct-row.is-switching { opacity: .5; }
+
+.acct-sep {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--line);
+}
+
+.acct-action {
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--fog);
+  font: 10px/1 var(--mono);
+  letter-spacing: .06em;
+  cursor: pointer;
+  text-align: left;
+}
+.acct-action:hover { color: var(--amber); }
+
+.tile.is-pending,
+.tile.is-failed {
+  display: grid;
+  /* Body centred in the space left over, action bar pinned to the bottom — the
+     same place it sits on a finished tile. */
+  grid-template-rows: 1fr auto;
+  justify-items: center;
+  align-items: center;
+  aspect-ratio: 3 / 4;
+  border: 1px dashed var(--line);
+  border-radius: 3px;
+  background: var(--ink-2);
+}
+.tile.is-failed { border-color: var(--alarm); }
+
+.pending-body {
+  text-align: center;
+  padding: 10px;
+  color: var(--fog);
+  font: 10px/1.5 var(--mono);
+  letter-spacing: .06em;
+}
+.spinner {
+  width: 22px;
+  height: 22px;
+  margin: 0 auto 8px;
+  border: 2px solid var(--line);
+  border-top-color: var(--amber);
+  border-radius: 50%;
+  animation: fr-spin .8s linear infinite;
+}
+@keyframes fr-spin { to { transform: rotate(360deg); } }
+.pending-label { color: var(--amber); }
+.tile.is-failed .pending-label { color: var(--alarm); }
+.tile.is-pending > .tile-url,
+.tile.is-failed > .tile-url {
+  align-self: end;
+  justify-self: stretch;
+}
+
+.pending-prompt {
+  margin-top: 4px;
+  opacity: .55;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.tile-note {
+  font: 9px/1.3 var(--mono);
+  letter-spacing: .04em;
+  color: var(--alarm);
+  text-align: center;
+}
+
+.tile-url {
+  display: flex;
+  gap: 4px;
+}
+
+.tile-open,
+.tile-copy {
+  flex: 1;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--ink-2);
+  color: var(--fog);
+  font: 9px/1 var(--mono);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+.tile-open:hover,
+.tile-copy:hover {
+  color: var(--amber);
+  border-color: var(--amber);
+}
+
+/* ---- picker ---- */
+
+.sheet {
+  position: fixed;
+  inset: 0;
+  /* Column flex so the bar and the paste field keep their natural height and
+     the tile grid absorbs the rest. Scrolling belongs to the grid, not the
+     sheet — otherwise the field scrolls away with it. */
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  padding: var(--gap);
+  background: var(--ink);
+  overflow: hidden;
+}
+.sheet > .sheet-bar,
+.sheet > .field,
+.sheet > #tiles-more { flex: 0 0 auto; }
+
+/* Pinned below the scrolling grid rather than at the end of it, so it is
+   reachable without scrolling to the bottom of several thousand tiles. */
+#tiles-more { width: 100%; }
+
+.sheet-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0 2px 0 0;
+  list-style: none;
+  /* The paste field sits above now, so the grid takes whatever height is left
+     and scrolls within it — no arbitrary cap, no dead space under a short
+     library, and the field stays put instead of drifting with the row count. */
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  align-content: start;
+}
+.tiles img {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  object-fit: cover;
+  cursor: pointer;
+}
+.tiles img:hover { border-color: var(--amber); }
+
+.is-hidden { display: none !important; }

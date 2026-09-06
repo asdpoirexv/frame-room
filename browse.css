@@ -1,0 +1,484 @@
+/* Frame Room — browse feed.
+   Full-viewport scroll-snap column. Same colour-suite palette as the panel, but
+   the chrome recedes further: here the renders are the entire point. */
+
+:root {
+  --ink:    #0F1219;
+  --ink-2:  #161A23;
+  --line:   #252B37;
+  --fog:    #8A93A6;
+  --paper:  #E4E9F2;
+  --amber:  #E8A33D;
+  --alarm:  #E0574E;
+
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --bar-h: 44px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  background: var(--ink);
+  color: var(--paper);
+  font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* ---- header ---- */
+
+.bar {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: var(--bar-h);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 16px;
+  background: rgba(15, 18, 25, .82);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
+}
+
+.wordmark {
+  margin: 0;
+  font: 600 12px/1 var(--mono);
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+.wordmark span { color: var(--fog); }
+
+.counter {
+  font: 10px/1 var(--mono);
+  letter-spacing: .1em;
+  color: var(--amber);
+}
+
+.star {
+  position: absolute;
+  /* Card has 16px padding; offset past it so the control sits just inside the
+     stage's top-right corner. */
+  top: 24px;
+  right: 24px;
+  z-index: 4;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: rgba(15, 18, 25, .78);
+  color: var(--fog);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color .12s, border-color .12s, transform .1s;
+}
+.star:hover { color: var(--amber); border-color: var(--amber); }
+.star:active { transform: scale(.9); }
+.star.is-on { color: var(--amber); border-color: var(--amber); }
+
+.starfilter {
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--ink-2);
+  color: var(--fog);
+  font: 10px/1 var(--mono);
+  letter-spacing: .08em;
+  cursor: pointer;
+}
+.starfilter:hover { color: var(--amber); border-color: var(--amber); }
+.starfilter.is-on { color: var(--amber); border-color: var(--amber); }
+
+.accounts {
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--ink-2);
+  color: var(--paper);
+  font: 10px/1 var(--mono);
+  letter-spacing: .08em;
+  cursor: pointer;
+}
+.accounts:hover { border-color: var(--amber); }
+.is-hidden { display: none !important; }
+
+.source {
+  font: 10px/1 var(--mono);
+  letter-spacing: .08em;
+  color: var(--fog);
+}
+.source.is-bad { color: var(--alarm); }
+
+.hint {
+  margin-left: auto;
+  font: 10px/1 var(--mono);
+  letter-spacing: .08em;
+  color: var(--fog);
+}
+
+/* ---- feed ---- */
+
+.feed {
+  height: 100%;
+  padding-top: var(--bar-h);
+  /* Without this, scroll-snap seats each card's top at the container's top —
+     behind the fixed header — so every card sits ~bar-h too high. This tells
+     snapping to account for the header. */
+  scroll-padding-top: var(--bar-h);
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+  outline: none;
+}
+.feed::-webkit-scrollbar { display: none; }
+
+.card {
+  position: relative;
+  height: calc(100vh - var(--bar-h));
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+/* The stage keeps portrait and landscape renders from jumping around. */
+.stage {
+  position: relative;
+  height: 100%;
+  max-height: calc(100vh - var(--bar-h) - 32px);
+  aspect-ratio: 3 / 4;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--ink-2);
+}
+
+.stage video,
+.stage img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+/* Poster sits under the video and fades out once frames are flowing. */
+.stage img { z-index: 1; }
+.stage video { z-index: 2; opacity: 0; transition: opacity .18s ease; }
+.card.is-playing .stage video { opacity: 1; }
+
+.meta {
+  position: absolute;
+  inset: auto 0 0 0;
+  z-index: 3;
+  display: grid;
+  gap: 5px;
+  padding: 28px 12px 12px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, .78));
+}
+
+.meta-prompt {
+  font-size: 12px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font: 9px/1 var(--mono);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--fog);
+}
+.meta-row a {
+  color: var(--fog);
+  text-decoration: none;
+  border-bottom: 1px solid var(--line);
+}
+.meta-row a:hover { color: var(--amber); border-color: var(--amber); }
+.meta-rerun { color: var(--amber) !important; }
+.meta-rerun-pending {
+  color: var(--fog);
+  opacity: .6;
+  font-style: italic;
+}
+
+.badge {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  z-index: 4;
+  padding: 3px 7px;
+  border-radius: 2px;
+  background: rgba(15, 18, 25, .78);
+  font: 9px/1 var(--mono);
+  letter-spacing: .1em;
+  color: var(--fog);
+}
+
+.card.is-error .stage { border-color: var(--alarm); }
+.card-error {
+  position: absolute;
+  inset: 50% 0 auto 0;
+  z-index: 4;
+  text-align: center;
+  font: 10px/1.4 var(--mono);
+  color: var(--alarm);
+}
+
+/* ---- states ---- */
+
+.state {
+  height: calc(100vh - var(--bar-h));
+  display: grid;
+  place-content: center;
+  text-align: center;
+  font: 11px/1.6 var(--mono);
+  letter-spacing: .08em;
+  color: var(--fog);
+}
+.state.is-bad { color: var(--alarm); }
+
+@media (prefers-reduced-motion: reduce) {
+  .stage video { transition: none; }
+}
+
+/* ---------- header controls ---------- */
+
+/* One class for every header control, so they can't drift apart visually. */
+.ctl {
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--ink-2);
+  color: var(--paper);
+  font: 10px/1.4 var(--mono);
+  letter-spacing: .08em;
+  cursor: pointer;
+}
+.ctl:hover { border-color: var(--amber); color: var(--amber); }
+
+/* Search sits in the header rather than the filters popover: it is the control
+   you reach for most, and burying the most-used thing behind a menu is how the
+   header got crowded in the first place. */
+.search {
+  width: 150px;
+  cursor: text;
+  letter-spacing: .04em;
+}
+.search::placeholder { color: var(--fog); letter-spacing: .08em; }
+.search:focus { outline: none; border-color: var(--amber); color: var(--amber); }
+
+/* The chunked-render tripwire. Zero height so it never affects layout, but it
+   must occupy a row of its own or the grid will place it beside a tile and it
+   can intersect while tiles are still off screen. */
+.feed-sentinel {
+  height: 1px;
+  grid-column: 1 / -1;
+  flex: 0 0 100%;
+}
+
+/* Popovers: filters and the overflow menu. The header held eleven controls in a
+   row; four filters and two backup actions now live behind two buttons. */
+.pop { position: relative; display: inline-flex; }
+
+.pop-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 190px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--ink-2);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .55);
+}
+.pop-menu .ctl,
+.pop-menu .starfilter { width: 100%; text-align: left; }
+
+/* Count of active filters, so collapsing them doesn't hide that any are on. */
+.badge-count {
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: 8px;
+  background: var(--amber);
+  color: var(--ink);
+  font-size: 9px;
+}
+
+/* ---------- grid views ---------- */
+
+/* Grids show posters only — no <video> elements at all — so the one-video-alive
+   rule the reel depends on is untouched. Playback stays a reel concern. */
+.feed.is-grid {
+  display: grid;
+  /* A default, so a missing size class degrades to a usable grid instead of one
+     full-width column. Without it, `display: grid` with no columns gives a
+     single column and every tile becomes viewport-wide. */
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px;
+  align-content: start;
+  /* Items stretch to the row (the default), and the row height is stated
+     explicitly per size below. See the note on grid-auto-rows. */
+  padding: calc(var(--bar-h) + 10px) 10px 40px;
+  scroll-snap-type: none;
+}
+/* Row height is STATED, not derived.
+ *
+ * Three attempts drove tile height from `aspect-ratio: 3/4` and all three
+ * collapsed. The reason: aspect-ratio does not participate in sizing an `auto`
+ * grid row when the item's width comes from a `1fr` track — the row is computed
+ * from the item's intrinsic content first, and every child of a tile is
+ * absolutely positioned, so that content height is zero. The row collapses, and
+ * no amount of align-items rescues it because there is no row to align to.
+ *
+ * A fixed row height has no such dependency. The columns still flex, so the
+ * tiles are not exactly 3:4 at every viewport width — object-fit: cover handles
+ * that, and a shape that is always right beats a ratio that is sometimes zero. */
+.feed.is-grid.is-sm {
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  grid-auto-rows: 190px;
+}
+.feed.is-grid.is-md {
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  grid-auto-rows: 300px;
+}
+.feed.is-grid.is-lg {
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-auto-rows: 440px;
+}
+/* Matches the default columns above, so a missing size class still has rows. */
+.feed.is-grid { grid-auto-rows: 300px; }
+
+.gtile {
+  position: relative;
+  /* Fills the row, whose height is fixed above. No aspect-ratio: it cannot size
+     a tile whose children are all absolutely positioned. */
+  height: 100%;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--ink-2);
+  overflow: hidden;
+  cursor: pointer;
+}
+.gtile:hover { border-color: var(--amber); }
+/* Absolutely positioned so an unloaded image contributes no layout at all — the
+   tile's size comes from its aspect ratio, never from whether the file has
+   arrived yet. */
+.gtile img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.gtile-empty {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: 8px;
+  color: var(--fog);
+  font: 9px/1.4 var(--mono);
+  text-align: center;
+}
+
+/* Kind marker — a grid tile shows a still either way, so without this a video
+   and an image are indistinguishable. */
+.gtile-kind {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  padding: 2px 5px;
+  border-radius: 2px;
+  background: rgba(15, 18, 25, .8);
+  color: var(--fog);
+  font: 9px/1 var(--mono);
+}
+
+.gtile .star {
+  top: 6px;
+  right: 6px;
+  width: 26px;
+  height: 26px;
+  font-size: 13px;
+}
+
+.gtile-caption {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 16px 6px 5px;
+  background: linear-gradient(transparent, rgba(10, 12, 18, .92));
+  color: var(--paper);
+  font: 9px/1.3 var(--mono);
+  opacity: 0;
+  transition: opacity .12s;
+  pointer-events: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.gtile:hover .gtile-caption { opacity: 1; }
+.feed.is-grid.is-sm .gtile-caption { display: none; }
+
+/* Defined here as well as in sidepanel.css — these are separate documents, and
+   an animation referencing a keyframe the document doesn't define silently does
+   nothing. */
+@keyframes fr-spin { to { transform: rotate(360deg); } }
+
+/* Hover preview. The video sits over the poster and fades in once it actually
+   plays, so a slow fetch never shows a black rectangle where the still was. */
+.gtile-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity .18s;
+}
+.gtile.is-playing .gtile-video { opacity: 1; }
+
+/* Fetching the bytes takes a moment on a large video — mark the tile so the
+   delay reads as loading rather than as nothing happening. */
+.gtile.is-loading::after {
+  content: '';
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--line);
+  border-top-color: var(--amber);
+  border-radius: 50%;
+  animation: fr-spin .8s linear infinite;
+}
+
+/* Hover preview runs at every grid size.
+ *
+ * It was disabled at small with `display: none`, which was the worst of both
+ * worlds: the JS wires hover for every video tile and fetches the whole file, so
+ * the cost was paid in full and the result thrown away. The reasoning was wrong
+ * too — a video is the same number of bytes whatever size tile it plays in.
+ *
+ * If a size restriction is ever wanted, it belongs in wireHoverPreview so the
+ * fetch never starts. Hiding the result only wastes the bandwidth. */

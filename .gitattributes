@@ -1,0 +1,4 @@
+# Normalise line endings. The working tree here is Windows, the files are
+# authored with LF, and without this every file would flip to CRLF on the next
+# checkout and produce a diff touching every line of a hundred-kilobyte file.
+* text=auto eol=lf

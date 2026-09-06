@@ -1,0 +1,12 @@
+{
+  "_note": "Captured from app.pixverse.ai DevTools. POST /creative_platform/image/i2i",
+  "customer_img_paths": ["upload/6b043fa4-281c-427d-a4e0-b0c2ac06c9d6.png"],
+  "prompt": "she smiles.",
+  "model": "qwen-image",
+  "create_count": 1,
+  "seed": 467293524,
+  "quality": "1080p",
+  "aspect_ratio": "4:5",
+  "credit_change": 10,
+  "model_name_default": "Qwen-image"
+}

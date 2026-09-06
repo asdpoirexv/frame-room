@@ -1,0 +1,20 @@
+{
+  "_note": "An UPLOADED image from the library. Only returned with asset_source: 0 — the same query with asset_source: 1 came back with total 0. Generated assets are source 1; uploads are source 0. Carries `path` and `url` directly, with no customer_paths. Account email domain replaced with example.com before publishing; nothing else altered.",
+  "asset_id": 415057574598535,
+  "folder_id": 0,
+  "asset_source": 0,
+  "asset_type": 0,
+  "path": "upload/aeae248c-588a-48e3-aa54-38aa0f9ddd45.jpg",
+  "url": "https://media.pixverse.ai/upload%2Faeae248c-588a-48e3-aa54-38aa0f9ddd45.jpg",
+  "width": 1440,
+  "height": 1795,
+  "name": "Upload_571207854_18428537062104914_8622538581494783035_n",
+  "duration": 0,
+  "platform": "web",
+  "account_id": 415048657118308,
+  "nick_name": "asdpoirexv191",
+  "email": "asdpoirexv.191@example.com",
+  "created_at": "2026-07-23T06:13:05Z",
+  "_request_that_returned_it": { "tab": "image", "asset_source": 0, "offset": 0, "limit": 40, "filter": { "video_status": [1] } },
+  "_request_that_returned_nothing": { "tab": "image", "asset_source": 1, "offset": 0, "limit": 40, "filter": { "video_status": [1] } }
+}

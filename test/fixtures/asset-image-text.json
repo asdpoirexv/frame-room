@@ -1,0 +1,27 @@
+{
+  "_note": "Library record for an image_text generation. Source lives under the SINGULAR customer_img_path — reading only the plural array made these look frameless. video_status 1 on a video that plays. Account email domain replaced with example.com before publishing; nothing else altered.",
+  "account_id": 412075296877446,
+  "create_mode": "image_text",
+  "created_at": "2026-07-14T15:50:16Z",
+  "creation_type": 2,
+  "customer_img_path": "",
+  "customer_img_url": "",
+  "customer_paths": {
+    "customer_img_path": "upload/480ff44d-5fdf-4f0d-8786-4530da29a1ef.jpg",
+    "customer_img_url": "https://media.pixverse.ai/upload%2F480ff44d-5fdf-4f0d-8786-4530da29a1ef.jpg",
+    "platform": "web"
+  },
+  "duration": 7,
+  "email": "asdpoirexv.180@example.com",
+  "first_frame": "https://media.pixverse.ai/pixverse%2Fvideo%2Fframe%2F94fb4f89-5c1b-44c1-b99b-782ad73cf967.jpg",
+  "model": "v6",
+  "multi_shot": 1,
+  "nick_name": "asdpoirexv180",
+  "prompt": "she smiles",
+  "quality": "360p",
+  "seed": 305684821,
+  "url": "https://media.pixverse.ai/pixverse%2Fmp4%2Fmedia%2Fweb%2Fori%2Fe2ce0c4e-4a9e-49b1-954a-394fa5116278_seed305684821.mp4",
+  "video_path": "pixverse/mp4/media/web/ori/e2ce0c4e-4a9e-49b1-954a-394fa5116278_seed305684821.mp4",
+  "video_status": 1,
+  "webp_url": "https://media.pixverse.ai/pixverse%2Fwebp%2Fmedia%2Fweb%2Fe2ce0c4e-4a9e-49b1-954a-394fa5116278_seed305684821.webp"
+}

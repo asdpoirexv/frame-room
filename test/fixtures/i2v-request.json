@@ -1,0 +1,14 @@
+{
+  "_note": "Captured from app.pixverse.ai DevTools. POST /creative_platform/video/i2v — this one produced a create_mode of image_text",
+  "customer_img_path": "upload/480ff44d-5fdf-4f0d-8786-4530da29a1ef.jpg",
+  "prompt": "she smiles",
+  "model": "v6",
+  "create_count": 1,
+  "customer_img_url": "https://media.pixverse.ai/upload%2F480ff44d-5fdf-4f0d-8786-4530da29a1ef.jpg",
+  "multi_shot": 1,
+  "quality": "360p",
+  "duration": 5,
+  "seed": 305684821,
+  "credit_change": 20,
+  "model_name_default": "PixVerse V6"
+}

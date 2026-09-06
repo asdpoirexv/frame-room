@@ -1,0 +1,17 @@
+{
+  "_note": "Captured from app.pixverse.ai DevTools. POST /creative_platform/video/frames — note the two sources differ in prefix AND extension",
+  "customer_img_paths": ["upload/b97e3238-9364-4636-b2ac-65db9a79e1f1.png", "pixverse/i2i/ori/c24284fb-aab0-46e1-bcd9-ccb1b765be81.jpg"],
+  "prompt": "she smiles",
+  "model": "v6",
+  "create_count": 1,
+  "customer_img_urls": ["https://media.pixverse.ai/upload%2Fb97e3238-9364-4636-b2ac-65db9a79e1f1.png", "https://media.pixverse.ai/pixverse%2Fi2i%2Fori%2Fc24284fb-aab0-46e1-bcd9-ccb1b765be81.jpg"],
+  "prompts": ["she smiles"],
+  "durations": [5],
+  "preview_mode": 0,
+  "quality": "360p",
+  "duration": 5,
+  "off_peak": 0,
+  "seed": 301402947,
+  "audio": 0,
+  "model_name_default": "PixVerse V6"
+}

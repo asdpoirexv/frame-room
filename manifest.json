@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "Frame Room",
+  "version": "0.64.0",
+  "description": "A private side-panel front-end for your own PixVerse account.",
+  "minimum_chrome_version": "116",
+  "incognito": "spanning",
+  "permissions": [
+    "storage",
+    "sidePanel",
+    "scripting",
+    "webRequest",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://app-api.pixverse.ai/*",
+    "https://media.pixverse.ai/*",
+    "https://app.pixverse.ai/*",
+    "https://pixverse-fe-upload.oss-accelerate.aliyuncs.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Open Frame Room"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "content_security_policy": {
+    "extension_pages": "default-src 'self'; img-src 'self' https://media.pixverse.ai blob: data:; media-src 'self' https://media.pixverse.ai blob:; connect-src 'self' https://app-api.pixverse.ai https://media.pixverse.ai https://pixverse-fe-upload.oss-accelerate.aliyuncs.com; style-src 'self' 'unsafe-inline'"
+  }
+}

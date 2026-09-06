@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Frame Room — Browse</title>
+  <link rel="stylesheet" href="browse.css" />
+</head>
+<body>
+
+  <header class="bar">
+    <h1 class="wordmark">Frame<span>Room</span></h1>
+    <span class="counter" id="counter"></span>
+
+    <button class="ctl is-hidden" id="back" type="button" title="Back to the grid (Esc)">&larr; grid</button>
+
+    <select class="ctl" id="view" title="View mode">
+      <option value="reel">Reel</option>
+      <option value="sm">Grid &middot; small</option>
+      <option value="md">Grid &middot; medium</option>
+      <option value="lg">Grid &middot; large</option>
+    </select>
+
+    <select class="ctl" id="sort" title="Sort order">
+      <option value="newest">Newest first</option>
+      <option value="oldest">Oldest first</option>
+      <option value="found">Recently archived</option>
+      <option value="shuffle">Shuffle</option>
+    </select>
+
+    <input class="ctl search" id="search" type="search" autocomplete="off"
+           placeholder="search prompts" title="Search prompt text" />
+
+    <span class="pop">
+      <button class="ctl" id="filters-btn" type="button" title="Filters">
+        filters<span class="badge-count is-hidden" id="filters-count"></span>
+      </button>
+      <span class="pop-menu is-hidden" id="filters-menu">
+        <button class="starfilter" id="starfilter" type="button" title="Show starred only">&#9734; starred</button>
+        <select class="ctl is-hidden" id="kinds" title="Filter by media type"></select>
+        <select class="ctl is-hidden" id="origins" title="Filter by uploaded or generated"></select>
+        <select class="ctl is-hidden" id="accounts" title="Filter by account"></select>
+        <select class="ctl is-hidden" id="models" title="Filter by model"></select>
+        <select class="ctl" id="period" title="Filter by when it was made">
+          <option value="all">Any time</option>
+          <option value="7">Last 7 days</option>
+          <option value="30">Last 30 days</option>
+          <option value="90">Last 90 days</option>
+          <option value="365">Last year</option>
+        </select>
+        <button class="ctl" id="filters-clear" type="button">clear all</button>
+      </span>
+    </span>
+
+    <span class="source" id="source"></span>
+
+    <span class="pop">
+      <button class="ctl" id="more-btn" type="button" title="More">&hellip;</button>
+      <span class="pop-menu is-hidden" id="more-menu">
+        <button class="ctl" id="export" type="button" title="Download the archive as a JSON backup">export archive</button>
+        <button class="ctl" id="import" type="button" title="Merge a JSON backup into the archive">import archive</button>
+      </span>
+    </span>
+    <input type="file" id="import-file" accept="application/json,.json" class="is-hidden" />
+
+    <span class="hint" id="hint">&uarr; &darr; / scroll &middot; space to pause</span>
+  </header>
+
+  <main class="feed" id="feed" tabindex="0">
+    <div class="state" id="state">Loading your library…</div>
+  </main>
+
+  <script src="browse.js" type="module"></script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+{
+  "_note": "Pagination envelopes from real /asset/library/list responses. The has_more:true case is what the cursor logic was written for.",
+  "more_pages": { "has_more": true, "next_offset": 50, "web_has_more": true, "web_next_offset": 50 },
+  "last_page":  { "has_more": false, "next_offset": 0, "web_has_more": false, "web_next_offset": 17 },
+  "stalled":    { "web_has_more": true, "web_next_offset": 50 },
+  "_filter_windows_observed": [
+    { "start_time": 1776796200, "end_time": 1784658599, "days": 91 },
+    { "start_time": 1782153000, "end_time": 1784831399, "days": 31 }
+  ]
+}
