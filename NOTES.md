@@ -662,6 +662,71 @@ exactly what that would look like. This is a hypothesis, not a finding, and it
 does not soften 1.3: a status that is 77% wrong about fetchability still cannot
 decide readiness. Probe. But it may finally explain *why* 7 behaves that way.
 
+### 1.14l Upload rejections and content moderation (2026-09-06)
+
+Pulled from the site's own i18n bundle (`i18n-enUS-*.js`, public, no auth). Note
+the bundle hash had changed since 2026-09-02, so the site redeploys often enough
+that any of this can move.
+
+**There is no single upload rule. Each entry point has its own**, which is why
+"upload sometimes fails" felt arbitrary:
+
+| rule | limit | where |
+|---|---|---|
+| `referenceGenerationFailed` | JPEG/PNG/WEBP, **300-6000 px** per side, **aspect ratio 0.4-2.5**, **max 30MB** | reference-image generation |
+| `tip` | JPG/PNG/WebP, max 1920x1920, up to 10MB | an upload widget |
+| `imageSizeLimit` | at least 300x300 | cover/upload validation |
+| `imageTooLarge` / `imageSizeInvalid` | 10MB / 20MB | two different widgets |
+| `videoSizeLimit` / `size` | 500MB / 2GB | video upload |
+| measured (1.14c-bis) | **max 4000 px per side** | `batch_upload_media`, our path |
+
+**The aspect-ratio and minimum-size rules do NOT apply to our path**, and we
+already have the evidence: the 1.14c-bis bisection registered **4000x100**
+successfully (aspect 40, far outside 0.4-2.5) and **32x32** successfully (far
+below the 300 minimum). So for `batch_upload_media` the only measured hard rule
+remains 4000 px per side. Do not import the reference-image constraints into our
+validation; they belong to a different endpoint.
+
+**Content moderation is POST-generation, not pre-submission.** The card the site
+shows on a flagged asset is i18n key `appeal`, "Policy Violation Detected", with
+`appealContent`:
+
+> This content was flagged by internal or third-party safety systems for
+> violating Community Guidelines.
+
+Flagged, not blocked. The generation runs, the file lands on the CDN, and the
+flag is applied afterwards. **This is very probably the explanation for
+`video_status: 7`** (1.3, 1.14k): 1111 of 1439 status-7 records have a fetchable
+file because the render genuinely completed before being flagged. Still a
+hypothesis - the field driving the card has not been identified - but it now has
+a mechanism behind it rather than being merely odd.
+
+**The client does no prompt content-filtering at all.** The only prompt rules in
+the bundle are lengths: `promptTooLong` "Each prompt must not exceed 5000
+characters" and `promptLengthLimit` "The text should not exceed 500 characters".
+There is no blocklist, no pre-flight check endpoint, and **no numeric error-code
+to message map anywhere in the client** - it simply renders whatever `ErrMsg` the
+server returns. So any prompt filtering is server-side and only observable by
+submitting.
+
+**Consequences are real.** The bundle carries account-state strings: "Your
+account has been suspended because content you generated or your activity
+violated our Community Guidelines" and a permanent-ban variant. Repeated flags
+are not free.
+
+**Deliberately not done:** characterising the prompt filter by submitting
+candidate prompts. Given the suspension and ban strings above, probing a
+moderation system with the account's own credentials risks the accounts rather
+than the credits. If it is ever wanted, do it on a throwaway account and not this
+one.
+
+**What would close the rest**, both needing a signed-in session:
+1. Load `/creation/video` and scan the chunks that only load there - the prompt
+   handling and upload validation live in those, not in the homepage bundle.
+2. Fetch `asset/library/list` and diff a flagged record against a clean one. The
+   field driving the `appeal` card is in that response and is currently being
+   discarded by `slimVideo`, which is why the archive has no moderation column.
+
 ### 1.14d `multi_shot` — answered (2026-09-02)
 
 It is a **user-facing toggle** in the video composer, sitting next to Audio. Its
