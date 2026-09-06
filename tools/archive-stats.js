@@ -122,6 +122,88 @@ if (customCross) {
   process.exit(0);
 }
 
+// --flagged: review what tripped moderation.
+//
+// PixVerse's own platform docs say, of a generation's status: "if Status is 7:
+// check if your prompt contains prohibited content". So `videoStatus: 7` is not
+// a generic failure — it is the content-moderation verdict, and the archive has
+// been recording it all along. No extra capture is needed to review this.
+//
+// Note it does NOT mean the file is missing: most status-7 records still have a
+// fetchable file, because the render completes and the flag lands afterwards
+// (NOTES 1.3, 1.14l). Flagged and unusable are different things.
+//
+// This prints your own prompts, on your own machine, so you can see what
+// actually tripped it rather than guessing. Nothing is sent anywhere.
+if (args.includes('--flagged')) {
+  const flagged = records.filter((r) => r.videoStatus === 7 || r.videoStatus === 8);
+  const total = records.filter((r) => r.kind === 'video').length;
+  console.log(`${flagged.length} flagged of ${total} videos `
+    + `(${total ? Math.round((flagged.length / total) * 100) : 0}%)\n`);
+
+  if (!flagged.length) { console.log('Nothing flagged in this archive.'); process.exit(0); }
+
+  // Which settings the flagged ones share. If flagging tracked a setting rather
+  // than the prompt, it would show here — and if it does not, that is the
+  // answer: it is the text, and no setting change avoids it.
+  for (const f of ['model', 'quality', 'mode']) {
+    const m = new Map();
+    for (const r of flagged) m.set(r[f] ?? '?', (m.get(r[f] ?? '?') ?? 0) + 1);
+    console.log(`by ${f}: ` + [...m].sort((a, b) => b[1] - a[1])
+      .map(([k, c]) => `${k}=${c}`).join('  '));
+  }
+
+  // The words that recur across flagged prompts. Frequency only, no judgement:
+  // it is a starting point for your own review, not a classifier.
+  const freq = new Map();
+  for (const r of flagged) {
+    for (const w of String(r.prompt ?? '').toLowerCase().match(/[a-z']{3,}/g) ?? []) {
+      freq.set(w, (freq.get(w) ?? 0) + 1);
+    }
+  }
+  const clean = records.filter((r) => r.videoStatus === 1);
+  const cleanFreq = new Map();
+  for (const r of clean) {
+    for (const w of String(r.prompt ?? '').toLowerCase().match(/[a-z']{3,}/g) ?? []) {
+      cleanFreq.set(w, (cleanFreq.get(w) ?? 0) + 1);
+    }
+  }
+  // Rates, not raw counts. The flagged set here is several times larger than the
+  // clean one, so comparing counts directly makes ordinary words like "camera"
+  // and "she" look damning purely because there is more flagged text to count.
+  // The first version of this did exactly that and produced a confident, wrong
+  // list. Compare per-record rates and require the word to be common enough to
+  // mean anything.
+  const rateF = (w) => (freq.get(w) ?? 0) / flagged.length;
+  const rateC = (w) => (cleanFreq.get(w) ?? 0) / (clean.length || 1);
+  const skewed = [...freq.keys()]
+    .filter((w) => (freq.get(w) ?? 0) >= 20)
+    .map((w) => [w, rateF(w), rateC(w)])
+    // Laplace-ish floor so a word absent from a small clean set is not treated
+    // as infinitely skewed.
+    .map(([w, f, c]) => [w, f, c, f / (c + 1 / (clean.length || 1))])
+    .filter(([, , , ratio]) => ratio > 2)
+    .sort((a, b) => b[3] - a[3])
+    .slice(0, 25);
+
+  console.log(`\nWords over-represented in flagged prompts (rates per record,`);
+  console.log(`${flagged.length} flagged vs ${clean.length} clean — a pointer for your`);
+  console.log('own review, not a classifier):');
+  for (const [w, f, c, ratio] of skewed) {
+    console.log(`  ${ratio.toFixed(1).padStart(6)}x   ${f.toFixed(2)}/rec flagged vs ${c.toFixed(2)} clean   ${w}`);
+  }
+
+  console.log('\nMost recent flagged prompts:');
+  for (const r of flagged.sort((a, b) => madeAtOf(b) - madeAtOf(a)).slice(0, 20)) {
+    console.log(`  [${r.status}] ${String(r.prompt ?? '(none)').slice(0, 100)}`);
+  }
+  process.exit(0);
+}
+
+function madeAtOf(r) {
+  return (r?.createdAt ? Date.parse(r.createdAt) || 0 : 0) || (r?.firstSeenAt ?? 0);
+}
+
 printTally('model', 'model');
 printTally('kind', 'kind');
 printTally('mode', 'mode');

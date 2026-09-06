@@ -793,6 +793,67 @@ cross-tab it against model, quality, duration and mode over the several thousand
 records already held. That turns "flagged for bullshit reasons" into a measured
 distribution over the account's own history. It needs the field name first.
 
+### 1.14o PixVerse documents its error codes, and status 7 is moderation (2026-09-06)
+
+`docs.platform.pixverse.ai` publishes an error-code table for the **platform
+API**. It is a different surface from the internal `creative_platform` endpoints
+(1.14k), so codes may not transfer — but the moderation semantics almost
+certainly do, since the same backend does the moderating.
+
+| code | meaning |
+|---|---|
+| **500054** | **content moderation: "Image maybe contains inappropriate content"** |
+| **500063** | **multiple moderation failures: video non-compliance, image non-compliance, sensitive text** |
+| 400018 / 400019 | prompt / negative prompt exceeds **2048** characters |
+| 500030 | image cannot exceed 20M, 10000px |
+| 500033 | invalid image width or height |
+| 500032 / 500041 / 500042 | invalid format / upload failed / invalid path |
+| 500044 | reached the concurrent-generation limit |
+| 500090 | insufficient balance |
+| 500020 | no permission for this operation |
+
+Two things worth pulling out. The prompt limit here is **2048**, where the web
+client enforces 5000 (1.14n) — the surfaces disagree, so neither number is "the"
+limit. And 500063 names **"sensitive text"** explicitly, confirming prompts are
+moderated server-side as their own category.
+
+**This corrects 1.14g.** That section says "there is still no coherent error-code
+family". For the platform API there is: `400xxx` for parameter and validation
+faults, `500xxx` for business logic. The internal API's `10001` / `10003` do not
+fit it, so the two schemes genuinely differ — but "no family exists" was too
+strong.
+
+**And it settles `video_status: 7`.** PixVerse's own troubleshooting page says,
+of a generation's status:
+
+> if Status is 7 : check if your prompt contains prohibited content
+
+So status 7 is not a generic failure. **It is the content-moderation verdict on
+the prompt.** Everything in 1.3 stands — it still cannot decide readiness, since
+most status-7 records have a fetchable file — but it now has a precise meaning
+rather than being merely unreliable. The file exists because the render completes
+and the flag is applied afterwards (1.14l).
+
+**No extra capture is needed to act on this.** `videoStatus` has been in the
+archive all along, so the moderation verdict on several thousand past
+generations is already on disk. `tools/flag-probe.js` is no longer required for
+this question; it would only distinguish `media_locked` / `is_hidden` /
+`block_remake`, which is now a curiosity rather than the blocker.
+
+`tools/archive-stats.js --flagged` reviews it: the flagged share, how it breaks
+down by model, quality and mode, and which words are over-represented in flagged
+prompts versus clean ones.
+
+**A methodology note, because the first version of that was wrong.** It compared
+raw word counts between flagged and clean prompts. The flagged set is several
+times larger, so ordinary words — "camera", "she", "with" — came out looking
+damning purely because there was more flagged text to count. It compares
+per-record rates now. A confident wrong list is worse than no list.
+
+**On charges:** the docs do not say whether a moderated generation is charged or
+refunded, and point to api@pixverse.ai. So the credit ledger (0.66.0) remains the
+only way to answer that from here.
+
 ### 1.14d `multi_shot` — answered (2026-09-02)
 
 It is a **user-facing toggle** in the video composer, sitting next to Audio. Its
