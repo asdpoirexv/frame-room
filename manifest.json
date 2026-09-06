@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Frame Room",
-  "version": "0.64.0",
+  "version": "0.64.1",
   "description": "A private side-panel front-end for your own PixVerse account.",
   "minimum_chrome_version": "116",
   "incognito": "spanning",

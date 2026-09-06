@@ -9,6 +9,42 @@ would be worse than leaving them blank.
 the fact, in two sittings rather than as each change landed, and the times were
 not recorded. Inventing them would break the rule directly above.
 
+## 0.64.1 — 2026-09-06
+
+**PixVerse publishes an official CLI, and it says we were wrong about Flux.**
+
+`github.com/PixVerseAI` has three public repos: `cli`, `skills` and
+`PixVerse-MCP`. The CLI's README carries the authoritative model list, and every
+id derived from the web bundle's i18n keys in 0.60.0 is confirmed exactly.
+
+One conclusion was not. 0.60.0 stated that "no Flux model is offered at all".
+**`flux-3.0` exists**, and it is a video model. Dropping `flux-dev` was still
+correct — that id is fiction — but absence from one Basic account's dropdown got
+read as absence from the platform, which is precisely the error NOTES 1.12
+already warns about for the archive. `v5.5` and `wan-3.0` were missing from our
+list too. Comments and NOTES corrected; no shipped behaviour changes, since none
+of these are selectable on this account anyway.
+
+Two open guesses closed. **GPT Image 2 is `gpt-image-2.0`**, whose id 0.60.0
+recorded as never found. **Nano Banana 2 is `gemini-3.1-flash`**, stated outright
+in the README — the remaining pairing between `gemini-3.0` and `gemini-2.5-flash`
+is still not established and is left unwritten.
+
+**There is a second, official, public API — and we are staying off it.**
+`PixVerse-MCP` talks to `api.pixverse.ai/openapi/v2/*` with an `api_key` header,
+a different surface entirely from the internal `creative_platform` endpoints this
+extension uses. It is documented and stable and offers modes we lack, but it
+bills against separately purchased API credits, and it has **no endpoint for
+listing past generations** — only `video/result/{video_id}` for a job you already
+hold. The archive, Browse and every sweep here are built on `asset/library/list`.
+Migrating would trade the irreplaceable thing for cleaner plumbing. Written up as
+NOTES 1.14k so the next person does not have to re-reach the conclusion.
+
+Also noted for later, not yet built: `--off-peak` is a real user-selectable
+discount ("lower credit cost") and `off_peak` is already plumbed through our
+frames payload and hardcoded to `0`, so we decline it on every generation.
+`--detail-level` and `--idempotency-key` exist in the CLI's `capabilities.json`.
+
 ## 0.64.0 — 2026-09-06
 
 **Browse renders a chunk at a time instead of the whole archive.**

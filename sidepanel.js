@@ -28,9 +28,16 @@ const MODELS = {
 
 // Read off the live dropdowns on 2026-09-02 (NOTES 1.14e). Two corrections to
 // what was here before, both checkable: `v4.5` exists nowhere — not the
-// dropdown, not the JS bundle, not 4087 archive records — and `flux-dev` was
-// wrong twice, since the bundle's id is `flux_turbo` and no Flux model is
-// offered at all. Both removed rather than left to fail at request time.
+// dropdown, not the JS bundle, not 4087 archive records, and not PixVerse's own
+// CLI. `flux-dev` was also wrong, and both were removed rather than left to fail
+// at request time.
+//
+// Corrected 2026-09-06 against the official CLI (NOTES 1.14j): the claim that
+// followed here, that "no Flux model is offered at all", was WRONG. `flux-3.0`
+// exists and is a VIDEO model. Dropping `flux-dev` was still right — that id is
+// fiction — but absence from one Basic account's dropdown was read as absence
+// from the platform, which is the same error NOTES 1.12 warns about for the
+// archive. Also missing from the list below: `v5.5` and `wan-3.0`.
 //
 // The lists above are deliberately the SHORT ones: PixVerse's own models plus
 // the Seedream family, which is what these accounts can actually run. The site

@@ -422,6 +422,9 @@ Image ids present in the bundle: `qwen-image`, `seedream-4.0`, `seedream-4.5`,
 **The id↔name mapping is only partly settled on the image side.** "Nano Banana"
 is Google's branding, and there are four Nano Banana entries and four `gemini-*`
 ids, so the pairing is obvious but *not verified* — don't write it down as fact.
+**Superseded on 2026-09-06 by PixVerse's own CLI — see 1.14j.** Read that first;
+several statements in this section are confirmed there and one is wrong.
+
 GPT Image 2's id was not found at all. `wan2.7-image` did not appear in the
 dropdown. The way to close this costs one generation per model: pick it, fire,
 and read `model` off the payload.
@@ -557,6 +560,107 @@ a source video, so it was not done unprompted.
 
 Preset fields worth knowing when it is picked up: `restyle_id`, `display_name`,
 `restyle_prompt` (the full prompt text), and a per-preset `qualities`.
+
+### 1.14j PixVerse publishes its own CLI, and it settles the model list (2026-09-06)
+
+`github.com/PixVerseAI` has three public repos: **cli** (official, npm `pixverse`),
+**skills**, and **PixVerse-MCP**. The CLI's README carries the authoritative model
+ids. Everything in 1.14e that was derived from the web bundle's i18n keys is
+**confirmed exactly** — `seedance-2.0-standard/-fast/-mini`, `happyhorse-1.0`,
+`kling-o3-standard/-pro/-4k`, `kling-3.0-*`, `grok-imagine`, `grok-imagine-1.5`,
+`veo-3.1-lite/-standard/-fast`, `sora-2`, `sora-2-pro`, `minimax-h3`,
+`gemini-omni-flash`, `pixverse-c1`, `v6`, `v5.6`, `v5`, `seedance-2.5`.
+
+**One thing we got wrong.** 1.14e says "no Flux model is in the dropdown at all",
+and the code comment said the same. **`flux-3.0` exists**, and it is a *video*
+model, not an image one. Removing `flux-dev` was still correct — that id is
+fiction — but the conclusion drawn from its absence was too broad. Absence from
+one account's dropdown is not absence from the platform, which is the same
+mistake 1.12 already warned about for the archive and which was made again
+anyway.
+
+Also missing from our list: **`v5.5`** and **`wan-3.0`** (video). `v4.5` appears
+nowhere in the official list either, so removing it was right.
+
+**Two guesses now closed:**
+
+- **GPT Image 2 is `gpt-image-2.0`.** 1.14e recorded that its id "was not found
+  at all".
+- **Nano Banana 2 is `gemini-3.1-flash`**, stated outright in the CLI README. The
+  image list is `gemini-3.1-flash`, `gemini-3.1-flash-lite`, `gemini-3.0`,
+  `gemini-2.5-flash` — exactly the four ids guessed against exactly the four Nano
+  Banana entries. `2 Lite` to `-flash-lite` is near-certain by name. Which of
+  `gemini-3.0` / `gemini-2.5-flash` is "Pro" versus plain "Nano Banana" is still
+  **not** established; do not write it down.
+
+**Flags the official client exposes that we do not:**
+
+- **`--off-peak`** — "Use off-peak pricing (lower credit cost)". This is a real,
+  user-selectable discount, not a time-of-day condition. `off_peak` is already
+  plumbed through our frames payload and hardcoded to `0` in `sidepanel.js`, so
+  we have been declining it on every generation. Not supported by Seedance 2.5.
+- **`--multi-shot`** — "Enable or disable multi-shot mode (video only)",
+  confirming both the meaning (1.14d) and that it is video-only. Not supported by
+  Seedance 2.5.
+- **`--detail-level`** and **`--idempotency-key`** — present in `capabilities.json`
+  though absent from the README. `detail_level` is the variable that appears in
+  the i2i pricing formula and that our estimator defaults to `0` without knowing
+  what it is. An idempotency key is directly relevant to duplicate submissions.
+
+The CLI also auto-resizes local images "to fit 1920x1920", against the 4000px
+hard reject we measured in 1.14c-bis. Not a contradiction — one is PixVerse's
+sensible default, the other is the API's limit — but 1920 is what they consider
+reasonable.
+
+### 1.14k There is a second, official, public API — and we should not move to it (2026-09-06)
+
+`PixVerse-MCP` talks to a **completely different surface**:
+`https://api.pixverse.ai/openapi/v2/...`, authenticated with an `api_key` header,
+not the `token` header on `app-api.pixverse.ai/creative_platform` that this
+extension uses. Endpoints there:
+
+```
+POST /openapi/v2/video/text/generate        POST /openapi/v2/video/extend/generate
+POST /openapi/v2/video/img/generate         POST /openapi/v2/video/lip_sync/generate
+POST /openapi/v2/video/transition/generate  POST /openapi/v2/video/sound_effect/generate
+POST /openapi/v2/video/fusion/generate      GET  /openapi/v2/video/result/{video_id}
+POST /openapi/v2/image/upload               POST /openapi/v2/media/upload
+```
+
+It is tempting — documented, stable, and it offers modes we lack (text-to-video,
+extend, lip sync, sound effects, fusion) plus a plain `image/upload` instead of
+the Aliyun OSS signing dance. **Do not migrate.** Two disqualifying reasons:
+
+1. **It bills separately.** "This feature requires API Credits, which must be
+   purchased separately on PixVerse Platform." Subscription credits do not carry
+   over, so every generation would be paid for twice over.
+2. **It has no library.** There is no endpoint anywhere in that surface for
+   listing or searching past generations — only `video/result/{video_id}` for a
+   job you already hold the id of. The archive, the Browse feed and every sweep in
+   this project are built on `asset/library/list`. Moving would trade the
+   irreplaceable asset for cleaner plumbing.
+
+Worth stealing without migrating: `POST /openapi/v2/video/lip_sync/tts_list` is
+the public twin of the `video/tts/list` seen in 1.14b, and the `fusion`,
+`extend`, `lip_sync` and `sound_effect` modes tell us what the platform can do
+even if we reach them by another door.
+
+**A status enum, with a caveat.** That API's `status` field is documented in the
+client as `1` COMPLETED, `2` PENDING, `3` IN_PROGRESS, `6` CANCELLED, `7` FAILED,
+`8` FAILED, polled every 10s with a 300s default timeout.
+
+This is **not** the same field as the internal `video_status` in 1.3 and must not
+be treated as its documentation. But the overlap is striking: our 1810-video
+cross-tab found `1` always fetchable (174/174) and `8` never (0/3), matching
+COMPLETED and FAILED exactly. The anomaly is `7`, officially FAILED, where 1111 of
+1439 files were fetchable.
+
+If the enums are shared, `7` does not mean "not ready" — it means the generation
+was **failed or rejected** while the file still landed on the CDN. The account's
+own creation page is covered in "Policy Violation Detected" cards, which is
+exactly what that would look like. This is a hypothesis, not a finding, and it
+does not soften 1.3: a status that is 77% wrong about fetchability still cannot
+decide readiness. Probe. But it may finally explain *why* 7 behaves that way.
 
 ### 1.14d `multi_shot` — answered (2026-09-02)
 
