@@ -33,7 +33,7 @@ prompts, URLs, emails and ids, cannot appear in the output. The guarantee is a
 whitelist in `safe()`, not a redaction pass, so it can be read and checked
 rather than trusted.
 
-Run `node test/verify.js` after changing `background.js` — 622 checks against
+Run `node test/verify.js` after changing `background.js` — 632 checks against
 real captured API requests, no dependencies. (It said 92 for a long time; the
 number had simply stopped being maintained.) The suite parses every shipped file
 whole before testing any of its parts, because it works by extracting named
@@ -133,10 +133,16 @@ it; the field is sent only for parity with the web client.
    status check, that's the third time.
 
 3. **The service worker can die mid-render.** MV3 terminates it during long
-   waits, so a 25-minute video poll may report a timeout even though the render
-   completed server-side. It'll turn up in Browse afterwards via the archive.
-   The proper fix is moving long waits to `chrome.alarms`; deferred until it
-   actually bites.
+   waits, so a 25-minute video poll would report a timeout even though the
+   render completed server-side.
+
+   **This is handled**, and this entry said otherwise for a long time. A
+   `chrome.alarms` alarm fires every minute and `resumeOrphanedJobs()` picks up
+   any job whose worker was killed, using the asset-id snapshot persisted on the
+   job record to tell its own output from everything else in the library. See
+   `JOB_ALARM` in `background.js` and NOTES 2.4b. What remains true is that a
+   job can still time out on its own merits, and that the archive is the
+   backstop either way.
 
 ## Upload
 

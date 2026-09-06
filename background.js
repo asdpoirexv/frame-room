@@ -642,7 +642,7 @@ async function apiLogin(username, password) {
   const raw = await res.json();
   // A logical failure is HTTP 200 with a non-zero ErrCode (NOTES 1.14f) — the
   // first real one ever captured was 500200, "User does not exist."
-  if (raw?.ErrCode) throw new Error(raw.ErrMsg || `Login failed (${raw.ErrCode})`);
+  if (raw?.ErrCode) throw apiError(raw, 'Login failed');
   const result = raw?.Resp?.Result;
   if (!result?.Token) throw new Error('Login returned no token');
   return result;
@@ -1179,7 +1179,7 @@ async function apiFetch(path, body, method = 'POST', auth = null) {
         return apiFetchWith(path, body, method, renewed);
       }
     }
-    throw new Error(raw.ErrMsg || `API error ${raw.ErrCode}`);
+    throw apiError(raw);
   }
   return raw?.Resp ?? raw;
 }
@@ -1202,7 +1202,7 @@ async function apiFetchWith(path, body, method, auth) {
   const raw = TRANSPORT === 'page'
     ? await relayThroughPage(API + path, headers, body, method)
     : await (await fetch(API + path, init)).json();
-  if (raw?.ErrCode) throw new Error(raw.ErrMsg || `API error ${raw.ErrCode}`);
+  if (raw?.ErrCode) throw apiError(raw);
   return raw?.Resp ?? raw;
 }
 
@@ -1223,6 +1223,17 @@ async function apiFetchWith(path, body, method, auth) {
 // The regex stays as a backstop, deliberately loose: a false positive costs one
 // extra re-resolve, a false negative leaves you stuck on a dead token.
 const AUTH_ERR_CODES = new Set([10001, 10003]);
+
+// Build an Error that CARRIES the ErrCode. Every throw site uses this, because
+// the previous `new Error(raw.ErrMsg)` silently discarded the code whenever a
+// message was present — which is always — leaving nothing downstream able to
+// tell a moderation block from a quota error.
+function apiError(raw, fallback = 'API error') {
+  const err = new Error(raw?.ErrMsg || `${fallback} (${raw?.ErrCode})`);
+  err.code = raw?.ErrCode;
+  err.errMsg = raw?.ErrMsg ?? null;
+  return err;
+}
 
 // Heuristic for an auth rejection: the measured codes above, plus message text.
 function isAuthError(code, msg) {
@@ -3070,12 +3081,44 @@ async function creditsSnapshot(auth) {
   }
 }
 
+// What an ErrCode means, where we have grounds to say.
+//
+// MEASURED on the internal creative_platform endpoints by deliberately sending
+// bad credentials (NOTES 1.14g):
+//   10001 token rejected, 10003 no token
+//
+// DOCUMENTED by PixVerse for their PLATFORM api (docs.platform.pixverse.ai,
+// NOTES 1.14o). That is a different surface from the one this extension uses,
+// so these are plausible rather than confirmed here — which is why the label is
+// ADDED to the server's own message and never replaces it. If a code means
+// something else on this surface, the server's text still says so.
+const ERR_LABEL = {
+  10001: 'Session rejected',
+  10003: 'Not signed in',
+  500020: 'Not permitted on this plan',
+  500030: 'Image too large',
+  500033: 'Image dimensions rejected',
+  500044: 'Concurrency limit — this account already has generations running',
+  500054: 'Blocked: image flagged as inappropriate',
+  500063: 'Blocked: content or prompt flagged',
+  500090: 'Out of credits',
+};
+
 function friendly(err) {
   const msg = String(err?.message ?? err);
   if (msg === 'NO_TOKEN') return 'Not linked. Open PixVerse in a tab and sign in.';
   if (msg === 'TOKEN_EXPIRED') return 'Session expired. Reload your PixVerse tab.';
   if (msg === 'TIMED_OUT') return 'Still rendering after the wait window. Check your library.';
-  return msg;
+
+  // The code used to be thrown away whenever ErrMsg was present, which was
+  // always — so every server failure arrived as bare prose and moderation was
+  // indistinguishable from a quota error or a network fault. The code is now
+  // carried on the error and always shown, so even an unmapped failure can be
+  // looked up against PixVerse's published table instead of guessed at.
+  const code = err?.code;
+  if (!code) return msg;
+  const label = ERR_LABEL[code];
+  return label ? `${label} — ${msg} (${code})` : `${msg} (${code})`;
 }
 
 // Archive raw asset rows the moment they are seen — shared by the live poller

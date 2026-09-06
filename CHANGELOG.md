@@ -9,6 +9,39 @@ would be worse than leaving them blank.
 the fact, in two sittings rather than as each change landed, and the times were
 not recorded. Inventing them would break the rule directly above.
 
+## 0.67.0 — 2026-09-07
+
+**Failures now say which kind of failure they were.**
+
+`apiFetch` threw `new Error(raw.ErrMsg || ...)`, and since `ErrMsg` is always
+present the ErrCode was discarded every single time. Every server failure
+reached the user as bare prose, so a content-moderation block was
+indistinguishable from running out of credits, from hitting the concurrency
+limit, or from a network fault. For someone losing credits without knowing why,
+that is the wrong place to be throwing information away.
+
+All three throw sites now go through `apiError()`, which carries the code, and
+`friendly()` always shows it. Codes we can name are labelled:
+
+    10001 session rejected      500044 concurrency limit
+    10003 not signed in         500054 image flagged
+    500090 out of credits       500063 content or prompt flagged
+
+The label is **added to** the server's own message, never substituted. 10001 and
+10003 were measured on this surface; the 500xxx codes are documented for
+PixVerse's platform API, which is a different surface (NOTES 1.14k), so they are
+plausible rather than confirmed here. If one means something else, the server's
+own text is still right there. An unmapped code is printed too, so it can be
+looked up rather than guessed at.
+
+**A stale README claim, corrected.** "Three things that will bite" said the fix
+for worker death during long polls was "moving long waits to `chrome.alarms`;
+deferred until it actually bites". It has not been deferred for some time:
+`JOB_ALARM` fires every minute and `resumeOrphanedJobs()` recovers jobs whose
+worker was killed, using the persisted asset-id snapshot. NOTES had it right;
+the README did not. Same class of stale confident claim this project keeps
+finding in itself, now with a test pinning it.
+
 ## 0.66.0 — 2026-09-06
 
 **Every job now records what it actually cost.**

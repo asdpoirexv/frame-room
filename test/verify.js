@@ -1896,7 +1896,7 @@ section('Self re-authentication');
   const REAUTH_FNS = [
     'decodeJwt', 'buildAuth', 'readVault', 'vaultUpsert', 'listVaultAccounts',
     'readPasswords', 'savePassword', 'forgetPassword', 'accountsWithPassword',
-    'apiLogin', 'adoptFreshToken', 'accountHasLiveTab', 'isEvictionError',
+    'apiError', 'apiLogin', 'adoptFreshToken', 'accountHasLiveTab', 'isEvictionError',
     'reauthAccount', 'readAuth', 'vaultForget',
   ];
   const REAUTH_CONSTS = [
@@ -2390,6 +2390,33 @@ section('Self re-authentication');
       const est = extractFn('estimateCost');
       ok('preview mode counts as an unvalued discount', /if \(previewMode\) reasons\.push/.test(est));
   ok('off-peak counts as an unvalued discount', /if \(offPeak\) reasons\.push/.test(est));
+
+  // Error codes. `new Error(raw.ErrMsg || ...)` dropped the ErrCode whenever a
+  // message was present, which is always — so every server failure reached the
+  // user as bare prose, and a moderation block looked exactly like a quota
+  // error or a network fault. Someone losing credits could not tell why.
+  ok('no throw site drops the code', !/throw new Error\(raw\.ErrMsg/.test(SRC));
+  ok('every API throw carries it', (SRC.match(/throw apiError\(/g) || []).length >= 3);
+  const apiErr = extractFn('apiError');
+  ok('the code is attached to the error', /err\.code = raw\?\.ErrCode/.test(apiErr));
+  const fr = extractFn('friendly');
+  ok('the code is always shown, mapped or not', /\$\{msg\} \(\$\{code\}\)/.test(fr));
+  // The label is ADDED to the server's message, never substituted: the 500xxx
+  // codes are documented for PixVerse's platform API, a different surface from
+  // the one this extension uses, so they are plausible rather than confirmed.
+  ok('a label augments rather than replaces the server text',
+    /\$\{label\} — \$\{msg\} \(\$\{code\}\)/.test(fr));
+  ok('measured auth codes are mapped', /10001:/.test(SRC) && /10003:/.test(SRC));
+  ok('moderation is nameable', /500063:/.test(SRC) && /500054:/.test(SRC));
+  ok('concurrency and balance are nameable', /500044:/.test(SRC) && /500090:/.test(SRC));
+
+  // Docs drift. README described chrome.alarms as deferred long after the code
+  // shipped it — the same class of stale confident claim this suite exists to
+  // catch elsewhere.
+  const readmeSrc = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
+  ok('README no longer calls the alarm deferred',
+    !/moving long waits to `chrome\.alarms`; deferred/.test(readmeSrc));
+  ok('and the alarm really does exist', /chrome\.alarms\.create\(JOB_ALARM/.test(SRC));
 
   // Credit ledger. What a rejected submit costs is not knowable from outside —
   // observed as charged for i2i and inconsistent for frames — so it is measured
