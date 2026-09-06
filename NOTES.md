@@ -727,6 +727,72 @@ one.
    field driving the `appeal` card is in that response and is currently being
    discarded by `slimVideo`, which is why the archive has no moderation column.
 
+### 1.14m The library record has 88 fields; we keep about 19 (2026-09-06)
+
+Fetched live. The `asset/library/list` response array is **`Resp.data`** (not
+`assets` — worth stating, since guessing that cost a round of empty results), and
+each record carries **88 fields**. The captured fixtures show 106 paths but those
+include our own `_note` scaffolding and nested expansions; the real record is
+much wider than what `slimVideo` keeps.
+
+Fields we discard that look consequential:
+
+| field | why it matters |
+|---|---|
+| `media_locked`, `is_hidden`, `block_remake` | the strongest candidates for the moderation flag |
+| `feedback_id`, `is_dislike`, `is_collected`, `likes` | per-asset feedback state |
+| `negative_prompt` | a parameter we neither send nor display |
+| `motion_mode`, `camera_movement`, `lora_weight`, `motion_brush`, `mask_info` | generation controls we do not expose |
+| `output_width`, `output_height` | actual output dimensions, distinct from `aspect_ratio` |
+| `extended`, `is_remix`, `original_video_id` | lineage - which asset this came from |
+| `auto_character_prompt`, `optional_image_num` | inputs we never captured |
+
+Also confirmed: **`filter.video_status` is a whitelist**, e.g.
+`{"filter": {"video_status": [1]}}` returns only status-1 records. Frame Room
+filters by date and could filter by status too.
+
+**The moderation flag is NOT yet identified.** The signed-in account at the time
+of this investigation held exactly one video, status 1, clean, so there was
+nothing flagged to diff against. `media_locked: 0`, `is_hidden: 0`,
+`block_remake: false` on the clean record - all three are plausible, none is
+proven. Closing this needs one request from an account that actually has flagged
+assets.
+
+### 1.14n Why credits are lost, and why the client cannot warn you (2026-09-06)
+
+Searched every chunk loaded on `/creation/video` (65 of them, signed in) for a
+pre-flight prompt check: any route matching check/risk/audit/review/moderate/
+safe/sensitive/verify/detect/filter/validate. **There is none.** The only
+prompt rules in the client are lengths (`promptTooLong` 5000 chars,
+`promptLengthLimit` 500). No blocklist, no banned-word list, no check endpoint.
+There is also no numeric error-code map anywhere in the client: it renders
+whatever `ErrMsg` the server returns.
+
+So there are two distinct failure modes, and only one of them costs credits:
+
+1. **Rejected at submit.** The generate call returns a non-zero `ErrCode` and the
+   client shows the server's message. Fast enough to feel client-side, which is
+   probably why it reads as one.
+2. **Flagged after the render.** The generation runs to completion, the file
+   lands on the CDN, and "internal or third-party safety systems" (1.14l) mark it
+   afterwards. This is the expensive one, and it is very probably `video_status:
+   7` - which is exactly why 1111 of 1439 status-7 records still have a fetchable
+   file.
+
+**The client genuinely cannot warn in advance about case 2, because PixVerse
+itself does not decide until after the render.** No amount of client-side
+inspection will produce a pre-check that does not exist upstream.
+
+**Whether case 1 costs credits is the open question that matters**, and it is not
+yet established. If a submit-time rejection is free, then nothing is lost there
+and all the loss is in case 2. Worth establishing before building anything.
+
+**What would actually help**, and is evidence rather than guesswork: capture the
+moderation field (1.14m) into the archive, then let `tools/archive-stats.js`
+cross-tab it against model, quality, duration and mode over the several thousand
+records already held. That turns "flagged for bullshit reasons" into a measured
+distribution over the account's own history. It needs the field name first.
+
 ### 1.14d `multi_shot` — answered (2026-09-02)
 
 It is a **user-facing toggle** in the video composer, sitting next to Audio. Its
