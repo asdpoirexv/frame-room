@@ -9,6 +9,34 @@ would be worse than leaving them blank.
 the fact, in two sittings rather than as each change landed, and the times were
 not recorded. Inventing them would break the rule directly above.
 
+## 0.65.0 — 2026-09-06
+
+**Off-peak is now a toggle, and multi-shot is finally visible.**
+
+PixVerse's own CLI documents `--off-peak` as "use off-peak pricing (lower credit
+cost)". `off_peak` was already in the captured frames payload, already plumbed
+through `generateFrames`, and pinned to `0` in the panel — the wire was complete
+and the switch welded shut, so every frames generation declined the discount.
+
+It is a **paid-plan feature**, so it is off by default and its tooltip says so
+rather than letting a server rejection read as a bug. The estimate treats it like
+every other discount we can detect but cannot value: the badge drops to `⚡≤N`
+and names off-peak as the reason. PixVerse publishes the flag, not the
+multiplier.
+
+**A defect in 0.63.0, found while adding it.** The toggle row was shown only for
+`mode === 'frames'`, which was correct while it held audio and preview — both
+frames-only — and became wrong the moment multi-shot joined it, because
+`multi_shot` applies only to **animate**. The control was wired end to end,
+covered by tests, and invisible in the only mode where it did anything. Every
+test asserted the wiring; none asserted you could see it.
+
+Visibility is now per toggle, and which toggle belongs to which mode is decided
+by the captured payloads rather than by what the site's composer shows: `audio`,
+`preview_mode` and `off_peak` appear in the captured frames request, `multi_shot`
+in the captured i2v request. Sending a field never seen on the wire is how
+requests have been broken here before.
+
 ## 0.64.1 — 2026-09-06
 
 **PixVerse publishes an official CLI, and it says we were wrong about Flux.**

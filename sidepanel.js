@@ -57,6 +57,17 @@ const MODELS = {
 // assumes — 60s for Grok, 120s for most, 200s for Veo 3.1, 300s for Sora 2. Any
 // attempt to expose them needs DURATIONS reworked too.
 
+// Which toggles belong to which mode, keyed off the captured payloads:
+//   audio, preview_mode, off_peak  -> present in the captured FRAMES request
+//   multi_shot                     -> present in the captured I2V request
+// An empty list means the mode shows no toggles at all.
+const TOGGLE_MODES = {
+  't-audio': ['frames'],
+  't-preview': ['frames'],
+  't-offpeak': ['frames'],
+  't-multishot': ['animate'],
+};
+
 // i2i offers only 720p/1080p; the video flows expose the lower rungs too.
 const QUALITIES = {
   image: ['720p', '1080p'],
@@ -89,6 +100,7 @@ const blankForm = () => ({
   audio: false,
   preview: false,
   multiShot: 0,
+  offPeak: false,
 });
 
 const state = {
@@ -100,6 +112,7 @@ const state = {
   audio: false,
   preview: false,
   multiShot: 0,
+  offPeak: false,
   forms: { image: blankForm(), animate: blankForm(), frames: blankForm() },
 };
 
@@ -117,6 +130,7 @@ function captureForm() {
     audio: state.audio,
     preview: state.preview,
     multiShot: state.multiShot ?? 0,
+    offPeak: state.offPeak ?? false,
   };
 }
 
@@ -133,6 +147,7 @@ function applyForm(f) {
   setToggle('t-audio', 'audio', Boolean(f.audio));
   setToggle('t-preview', 'preview', Boolean(f.preview));
   setToggle('t-multishot', 'multiShot', Boolean(f.multiShot));
+  setToggle('t-offpeak', 'offPeak', Boolean(f.offPeak));
 
   clearSlot('first');
   clearSlot('last');
@@ -242,6 +257,7 @@ async function refreshCost() {
     audio: state.mode === 'frames' ? Boolean(state.audio) : false,
     multiShot: state.mode === 'animate' ? Boolean(state.multiShot) : false,
     previewMode: state.mode === 'frames' ? Boolean(state.preview) : false,
+    offPeak: state.mode === 'frames' ? Boolean(state.offPeak) : false,
     count: Number($('count').value) || 1,
   };
 
@@ -294,6 +310,7 @@ function idleReadout() {
     if (state.preview) bits.push('preview');
   }
   if (state.mode === 'animate' && state.multiShot) bits.push('multi-shot');
+  if (state.mode === 'frames' && state.offPeak) bits.push('off-peak');
 
   readout(`ready · ${bits.join(' · ')} · seed ${$('seed').value} · ×${$('count').value}`);
   $('go').disabled = false;
@@ -324,7 +341,24 @@ function setMode(mode, { reload = true } = {}) {
 
   $('ratio-field').classList.toggle('is-hidden', mode !== 'image');
   $('duration-field').classList.toggle('is-hidden', mode === 'image');
-  $('video-toggles').classList.toggle('is-hidden', mode !== 'frames');
+  // Per-toggle, not per-row. The row used to be shown only for frames, which
+  // was fine while it held audio and preview — both frames-only — and became a
+  // bug the moment multi-shot was added, because multi_shot applies ONLY to
+  // animate. The control existed, was wired end to end, and was invisible in the
+  // one mode where it did anything.
+  //
+  // Which toggle belongs to which mode is decided by the CAPTURED PAYLOADS, not
+  // by what the site's own composer shows. `off_peak` and `audio` appear in the
+  // captured frames request; neither appears in the captured i2v request, and
+  // sending a field we have never seen on the wire is how this project has
+  // broken requests before.
+  for (const [id, modes] of Object.entries(TOGGLE_MODES)) {
+    $(id).classList.toggle('is-hidden', !modes.includes(mode));
+  }
+  $('video-toggles').classList.toggle(
+    'is-hidden',
+    !Object.values(TOGGLE_MODES).some((modes) => modes.includes(mode)),
+  );
 
   $('model').innerHTML = MODELS[mode].map((m) => `<option>${m}</option>`).join('');
   $('quality').innerHTML = QUALITIES[mode]
@@ -523,6 +557,7 @@ function rerun({ mode, params, prompt }) {
   // across a mode switch.
   setToggle('t-audio', 'audio', mode === 'frames' && Boolean(params.audio));
   setToggle('t-preview', 'preview', mode === 'frames' && Boolean(params.previewMode));
+  setToggle('t-offpeak', 'offPeak', mode === 'frames' && Boolean(params.offPeak));
 
   // Multi-shot only exists on animate. Reset on every load so a value from one
   // rerun can't leak into an unrelated fresh generation.
@@ -623,7 +658,7 @@ function buildParams(seed, count) {
     seed,
     audio: state.audio ? 1 : 0,
     previewMode: state.preview ? 1 : 0,
-    offPeak: 0,
+    offPeak: state.offPeak ? 1 : 0,
   };
 }
 
@@ -1233,6 +1268,7 @@ function bindToggle(id, key) {
 }
 bindToggle('t-audio', 'audio');
 bindToggle('t-preview', 'preview');
+bindToggle('t-offpeak', 'offPeak');
 // Multi-shot: "generate multi-shot video with model-native capabilities" — the
 // site's own wording. It was previously reachable only by rerunning an old job
 // that happened to carry it, since nothing ever set it for a fresh generation.

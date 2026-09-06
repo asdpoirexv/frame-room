@@ -2389,6 +2389,29 @@ section('Self re-authentication');
       ok('marketing-hub promotions are detected', /marketing_hub_discount_info/.test(ad));
       const est = extractFn('estimateCost');
       ok('preview mode counts as an unvalued discount', /if \(previewMode\) reasons\.push/.test(est));
+  ok('off-peak counts as an unvalued discount', /if \(offPeak\) reasons\.push/.test(est));
+
+  // Off-peak. PixVerse's own CLI exposes `--off-peak` ("lower credit cost"), and
+  // `off_peak` was already plumbed through the frames payload and pinned to 0 —
+  // the wire was complete and the switch welded shut.
+  ok('the off-peak toggle exists', /id="t-offpeak"/.test(fs.readFileSync(path.join(ROOT, 'sidepanel.html'), 'utf8')));
+  ok('off-peak is sent from state, not hardcoded',
+    /offPeak: state\.offPeak \? 1 : 0/.test(panelSrc));
+  ok('no hardcoded off-peak remains', !/offPeak: 0,/.test(panelSrc));
+  ok('the tooltip says it needs a paid plan',
+    /Requires a paid plan/.test(fs.readFileSync(path.join(ROOT, 'sidepanel.html'), 'utf8')));
+
+  // Toggle visibility is per-toggle, keyed off which captured payload carries
+  // the field. It was per-ROW, shown only for frames — which silently made the
+  // multi-shot toggle unreachable in animate, the only mode where multi_shot
+  // does anything. The control was wired end to end and could never be seen.
+  ok('toggles declare their own modes', /const TOGGLE_MODES = \{/.test(panelSrc));
+  ok('multi-shot belongs to animate', /'t-multishot': \['animate'\]/.test(panelSrc));
+  ok('off-peak belongs to frames', /'t-offpeak': \['frames'\]/.test(panelSrc));
+  ok('the row hides only when no toggle applies',
+    /!Object\.values\(TOGGLE_MODES\)\.some/.test(panelSrc));
+  ok('the old frames-only row rule is gone',
+    !/'video-toggles'\)\.classList\.toggle\('is-hidden', mode !== 'frames'\)/.test(panelSrc));
       ok('exactness is derived from the reasons, not assumed',
         /exact: reasons\.length === 0/.test(est));
       ok('the panel marks an inexact figure with a bound',

@@ -345,7 +345,7 @@ function activeDiscounts(raw) {
 // Returns { credits, exact, reasons } — or credits null when it cannot be
 // computed at all. Never a guess: `exact: false` means the real cost is at most
 // this, and the panel must say so.
-async function estimateCost({ mode, model, quality, duration, audio, multiShot, previewMode, count }) {
+async function estimateCost({ mode, model, quality, duration, audio, multiShot, previewMode, offPeak, count }) {
   const key = PRICING_FORMULA[mode];
   if (!key) return { credits: null, exact: true, reasons: [] };
   const formulas = await getPricingFormulas();
@@ -359,6 +359,11 @@ async function estimateCost({ mode, model, quality, duration, audio, multiShot, 
   // Preview mode has its own multiplier, and we know no more about its value
   // than about the others — only that it is a discount, so it reduces the cost.
   if (previewMode) reasons.push('preview mode');
+
+  // Off-peak likewise. PixVerse's own CLI documents `--off-peak` as "use
+  // off-peak pricing (lower credit cost)" without publishing the multiplier, so
+  // the estimate becomes an upper bound rather than pretending to a number.
+  if (offPeak) reasons.push('off-peak');
 
   const vars = {
     ...PRICING_DEFAULTS,
