@@ -24,6 +24,15 @@ this gives you thousands. It is what corrected the model ids and what confirms,
 at 1810 videos, that `videoStatus` cannot decide readiness. Absence proves
 nothing here, though: it records what was generated, never what was offered.
 
+`tools/flag-probe.js` is not a node script — it is pasted into the service
+worker console. It identifies which library field marks an asset as
+policy-flagged, and it is built so the output can be shared without sharing the
+library: values are printed only when boolean, null, or a number under a
+million, and everything else is reported as its type. Strings, and therefore
+prompts, URLs, emails and ids, cannot appear in the output. The guarantee is a
+whitelist in `safe()`, not a redaction pass, so it can be read and checked
+rather than trusted.
+
 Run `node test/verify.js` after changing `background.js` — 614 checks against
 real captured API requests, no dependencies. (It said 92 for a long time; the
 number had simply stopped being maintained.) The suite parses every shipped file
