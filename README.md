@@ -33,7 +33,7 @@ prompts, URLs, emails and ids, cannot appear in the output. The guarantee is a
 whitelist in `safe()`, not a redaction pass, so it can be read and checked
 rather than trusted.
 
-Run `node test/verify.js` after changing `background.js` — 632 checks against
+Run `node test/verify.js` after changing `background.js` — 650 checks against
 real captured API requests, no dependencies. (It said 92 for a long time; the
 number had simply stopped being maintained.) The suite parses every shipped file
 whole before testing any of its parts, because it works by extracting named
@@ -116,7 +116,7 @@ for ids that weren't there before.
 **`credit_change` is echoed, not trusted.** You confirmed the server recomputes
 it; the field is sent only for parity with the web client.
 
-## Three things that will bite
+## Four things that will bite
 
 1. **Origin checks.** If the API starts 403-ing, it's validating `Origin` /
    `Referer` and now sees `chrome-extension://…`. Flip `TRANSPORT` to `'page'`
@@ -143,6 +143,17 @@ it; the field is sent only for parity with the web client.
    `JOB_ALARM` in `background.js` and NOTES 2.4b. What remains true is that a
    job can still time out on its own merits, and that the archive is the
    backstop either way.
+
+4. **Never write `chrome.storage` with a bare `get → mutate → set`.** `get`
+   returns a structured clone, and there is no compare-and-swap. Two of those
+   cycles overlapping on one key means the second writer saves a copy that never
+   saw the first writer's change — both `set` calls succeed, nothing errors, and
+   the update is gone. This was live for a long time and was erasing archive
+   records, reporting finished renders as timed out, and dropping freshly
+   captured tokens. Go through `withKeyLock(key, fn)` at the top of
+   `background.js`; if your function has to do slow work between the read and
+   the write, probe outside the lock and re-read inside it, the way
+   `verifyPending()` does. NOTES 2.3b.
 
 ## Upload
 

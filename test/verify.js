@@ -133,6 +133,14 @@ function extractFn(name) {
   throw new Error(`unterminated function: ${name}`);
 }
 
+/**
+ * The source of one function, by name. A thin alias over extractFn, used where a
+ * test needs to reason about ORDER inside a function rather than the mere
+ * presence of a line somewhere in the file — which is the failure mode that let
+ * a `finally` sit in the wrong place for two releases with a green suite.
+ */
+const fnBody = (name) => extractFn(name);
+
 /** Pull a top-level `const NAME = ...;` declaration out by brace/bracket matching. */
 function extractConst(name) {
   const re = new RegExp(`^const\\s+${name}\\s*=`, 'm');
@@ -1898,10 +1906,13 @@ section('Self re-authentication');
     'readPasswords', 'savePassword', 'forgetPassword', 'accountsWithPassword',
     'apiError', 'apiLogin', 'adoptFreshToken', 'accountHasLiveTab', 'isEvictionError',
     'reauthAccount', 'readAuth', 'vaultForget',
+    // The vault and password writers serialise through this now, so the sandbox
+    // has to carry it or every one of them throws ReferenceError.
+    'withKeyLock',
   ];
   const REAUTH_CONSTS = [
     'API', 'VAULT_KEY', 'OVERRIDE_KEY', 'PASSWORDS_KEY', 'reauthInFlight',
-    'MIN_LOGIN_INTERVAL_MS', 'lastLoginAt', 'EVICTED_RE',
+    'MIN_LOGIN_INTERVAL_MS', 'lastLoginAt', 'EVICTED_RE', 'writeChains',
   ];
 
   // A JWT the real decodeJwt will accept: header.payload.signature, base64url.
@@ -2279,7 +2290,26 @@ section('Self re-authentication');
       ok('and one already being resumed is skipped',
         /if \(resuming\.has\(record\.id\)\) continue/.test(panel));
       ok('the live loop registers itself', /runningJobIds\.add\(record\.id\)/.test(panel));
-      ok('and deregisters in a finally', /finally \{\s*runningJobIds\.delete\(record\.id\)/.test(panel));
+
+      // THIS ASSERTION USED TO PIN THE BUG. It required the deregister to sit in
+      // a `finally`, which it did — and that `finally` ran BEFORE the terminal
+      // saveJob, because 0.66.0 added the closing credit read after it. So for
+      // the length of an untimed network call the job was absent from
+      // runningJobIds while still persisted as 'running': exactly the pair of
+      // conditions resumeOrphanedJobs() adopts on. The test was green the whole
+      // time, because it checked where a line was rather than what it meant.
+      //
+      // What actually matters is the ORDER: the guard may only be released once
+      // the terminal state is on disk.
+      {
+        const run = fnBody('run');
+        const del = run.indexOf('runningJobIds.delete(record.id)');
+        const save = run.lastIndexOf('await saveJob(record)');
+        ok('the live loop deregisters only after the terminal save',
+          del > 0 && save > 0 && del > save);
+        ok('and not from a finally that races the save',
+          !/finally \{\s*runningJobIds\.delete/.test(run));
+      }
 
       // Resuming forever is worse than settling honestly.
       ok('a job past its deadline is settled, not polled',
@@ -2490,6 +2520,89 @@ section('Self re-authentication');
       ok('the worker types the upload from the blob, not the filename',
         /const contentType = blob\.type \|\|/.test(SRC));
       ok('and derives the extension from that MIME type', /MIME_EXT\[contentType\]/.test(SRC));
+    }
+
+    // ---------- serialised storage writes ----------
+    //
+    // chrome.storage.get returns a structured clone, so `get -> mutate -> set`
+    // run concurrently on one key means the second writer overwrites the first
+    // with a copy that never saw its change. Both sets succeed; nothing errors.
+    //
+    // These are behavioural, not textual. The first one deliberately runs the
+    // UNLOCKED shape too, because a concurrency test that passes whether or not
+    // the fix is present proves nothing — and this suite has shipped that kind
+    // of test before.
+    section('Serialised storage writes');
+    {
+      const lockSrc = `${extractConst('writeChains')}\n${extractFn('withKeyLock')}`;
+      const withKeyLock = new Function(`${lockSrc}; return withKeyLock;`)();
+
+      // A store with a real await on both sides, which is what opens the window.
+      const makeStore = () => {
+        const bag = { n: [] };
+        return {
+          bag,
+          get: async () => { await null; return JSON.parse(JSON.stringify(bag.n)); },
+          set: async (v) => { await null; bag.n = v; },
+        };
+      };
+      const append = (store, v) => async () => {
+        const cur = await store.get();
+        cur.push(v);
+        await store.set(cur);
+      };
+
+      // Control: the bug, reproduced. If this ever stops losing writes the test
+      // below has stopped proving anything and must be re-examined.
+      const unlocked = makeStore();
+      await Promise.all([append(unlocked, 'a')(), append(unlocked, 'b')()]);
+      ok('control: unlocked concurrent writes DO lose an update',
+        unlocked.bag.n.length === 1);
+
+      const locked = makeStore();
+      await Promise.all([
+        withKeyLock('k', append(locked, 'a')),
+        withKeyLock('k', append(locked, 'b')),
+      ]);
+      ok('the lock keeps both concurrent updates', locked.bag.n.length === 2);
+
+      // Serialising must be per key, or the archive probe would stall job saves.
+      const order = [];
+      const slow = async () => { await new Promise((r) => setTimeout(r, 20)); order.push('slow'); };
+      const quick = async () => { order.push('quick'); };
+      await Promise.all([withKeyLock('archive', slow), withKeyLock('jobs', quick)]);
+      ok('a different key is not blocked by a slow holder', order[0] === 'quick');
+
+      // One writer throwing must not wedge the key for the rest of the session.
+      let caught = null;
+      try { await withKeyLock('k2', async () => { throw new Error('boom'); }); }
+      catch (e) { caught = e.message; }
+      check('a throwing holder still surfaces its error', caught, 'boom');
+      let after = false;
+      await withKeyLock('k2', async () => { after = true; });
+      ok('and the key still works afterwards', after);
+
+      // The writers that were actually losing data.
+      for (const fn of ['saveJob', 'archiveMerge', 'vaultUpsert', 'toggleStar',
+        'importArchive', 'migrateArchive', 'reconcileAccountTags',
+        'savePassword', 'forgetPassword']) {
+        ok(`${fn} serialises its read-modify-write`, /withKeyLock\(/.test(fnBody(fn)));
+      }
+
+      // verifyPending is the one that cannot simply be wrapped: it probes sixty
+      // URLs between its read and its write. Wrapping the whole thing would hold
+      // the archive lock across all that network and stall every running job's
+      // captureRows. It must probe unlocked, then re-read under the lock — so
+      // the pre-probe map must never be the thing written back.
+      {
+        const vp = fnBody('verifyPending');
+        ok('verifyPending probes outside the lock',
+          vp.indexOf('mapLimit(') < vp.indexOf('withKeyLock('));
+        ok('and re-reads the archive under it',
+          /withKeyLock\(ARCHIVE_KEY[\s\S]{0,200}await readArchive\(\)/.test(vp));
+        ok('so the stale pre-probe map is never written back',
+          !/set\(\{ \[ARCHIVE_KEY\]: map \}\)/.test(vp));
+      }
     }
   })().catch((e) => {
     fail++;

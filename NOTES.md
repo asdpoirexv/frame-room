@@ -1104,6 +1104,74 @@ Merge rules that matter:
 Schema migrations are versioned (`archiveMeta`); several past migrations exist
 solely to force a re-sweep after an extraction bug was fixed.
 
+### 2.3b Every storage write was a lost-update race (2026-09-07)
+
+`chrome.storage` has no compare-and-swap, and `get` hands back a **structured
+clone** — a private copy. Every persistent structure in `background.js` was
+updated as `get → mutate → set`. Two of those overlapping on one key means the
+second writer's `get` ran before the first writer's `set`, so it writes back a
+copy that never contained the first change. Both `set` calls succeed. Nothing
+errors. The update is simply gone.
+
+This was not a theoretical hazard; three instances were doing real damage.
+
+**The archive was being truncated by its own integrity check.**
+`verifyPending()` read the whole archive, probed sixty URLs eight at a time —
+seconds to tens of seconds of network — and then wrote back the map it had read
+*before* the probe. Every record a running job archived in that window was
+erased. Section 2.3 above argues the archive is the only copy you control; it
+was being silently trimmed by the function whose job is to keep it honest.
+
+**A finished render could be reported as failed.** `MAX_CONCURRENT_PER_ACCOUNT`
+is 2 and accounts run in parallel on top of that, so concurrent `saveJob` calls
+are the normal case. Job A writes `done`; job B's overlapping save writes back
+its stale copy of A, still reading `running`. `resumeOrphanedJobs()` then finds
+a job that is `running` on disk with no live loop, adopts it, and past the
+deadline settles it as "Timed out." The recovery layer built to stop exactly
+that outcome was being fed a lie by the persistence layer.
+
+**Stale tokens fed the eviction path.** `vaultUpsert()` is called *unawaited*
+from the `webRequest` listener, which fires on every API request. Two captures
+interleave routinely, and a lost vault write leaves a stale token on disk — and
+a stale token is what triggers the "logged in elsewhere" handling in 2.2b. Some
+of that ping-pong had this underneath it.
+
+**The fix.** One primitive, `withKeyLock(key, fn)`: a per-key promise chain that
+serialises whole read-modify-write cycles. Per key, not global, so the archive
+probe cannot stall job saves. It runs `fn` on both settle paths, so one writer
+throwing does not wedge the key for the session.
+
+Serialising within the worker is *sufficient*, and that is worth being precise
+about. MV3 runs a single service worker, so there is no second writer outside
+this process to race with. It does **not** make a write atomic against worker
+death — nothing available here can. A worker killed mid-cycle still loses one
+update, which is the pre-existing situation, rather than silently discarding a
+concurrent writer's.
+
+`verifyPending()` could not simply be wrapped. Holding the archive lock across
+sixty probes would trade a correctness bug for a latency one, stalling every
+running job's `captureRows` for the whole window. It probes **outside** the
+lock, then re-reads the archive **inside** it and applies each verdict to the
+current record. The stale pre-probe map is never written back at all.
+
+**The test that was pinning the bug.** A green assertion read:
+
+    ok('and deregisters in a finally',
+      /finally \{\s*runningJobIds\.delete\(record\.id\)/.test(panel));
+
+It was satisfied. The `finally` was there. But 0.66.0 had added the closing
+credit read *after* it, so the guard was released while the job was still
+persisted as `running` — and `creditsSnapshot` goes through `apiFetch`, which
+has no timeout, so that window can outlast the 60-second alarm by minutes. The
+test checked where a line was, not what it meant, and so it certified the defect
+for two releases. It now asserts the **order**: the guard is released only after
+the terminal save is on disk.
+
+The concurrency tests that replaced it run the unlocked shape first as a
+control, and assert that it *does* lose an update. A concurrency test that
+passes whether or not the fix is present proves nothing, and this suite has
+shipped that kind of test before (section 3).
+
 ### 2.4 Nothing is filtered from the browse feed
 
 Explicit product decision: queued, rendering, and failed generations all render.

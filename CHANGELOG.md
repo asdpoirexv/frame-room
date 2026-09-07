@@ -9,6 +9,61 @@ would be worse than leaving them blank.
 the fact, in two sittings rather than as each change landed, and the times were
 not recorded. Inventing them would break the rule directly above.
 
+## 0.68.0 — 2026-09-07
+
+**Every storage write was a lost-update race. The archive was deleting itself.**
+
+Found by a ten-dimension review of the extension. `chrome.storage` has no
+compare-and-swap and its `get` returns a structured clone, so the `get → mutate
+→ set` shape used by every persistent structure in `background.js` silently
+loses one writer whenever two overlap on a key. Both writes succeed. Nothing
+errors.
+
+Three instances were doing real damage:
+
+- **`verifyPending()` was erasing archive records.** It read the whole archive,
+  probed sixty URLs eight at a time — seconds to tens of seconds of network —
+  then wrote back the map it read *before* the probe. Anything a running job
+  archived in that window was destroyed. The archive is the only copy of your
+  generations you control, and its own integrity check was trimming it.
+
+- **A completed render could be reported as "Timed out."** Two jobs run per
+  account and accounts run in parallel, so concurrent `saveJob` calls are
+  routine. One job's terminal `done` record was overwritten by another job's
+  stale copy still reading `running`; `resumeOrphanedJobs()` then adopted the
+  finished job and settled it as a timeout.
+
+- **Lost vault writes fed the eviction path.** `vaultUpsert()` is called
+  unawaited from the `webRequest` listener, which fires on every API request. A
+  dropped write leaves a stale token on disk, and a stale token is what produces
+  "account has been logged in elsewhere."
+
+Fixed with one primitive, `withKeyLock(key, fn)` — a per-key promise chain
+serialising whole read-modify-write cycles. Per key rather than global, so the
+archive probe cannot stall job saves. `verifyPending()` now probes outside the
+lock and re-reads under it, applying verdicts to current records; the stale
+pre-probe map is never written back.
+
+Serialising inside the worker is enough — MV3 runs one service worker, so there
+is no writer outside this process. It does not make writes atomic against worker
+death; nothing here can. A worker killed mid-cycle loses one update, as before.
+
+**Separately: the guard against double-polling a job was released too early.**
+`runningJobIds.delete(record.id)` sat in a `finally` that ran *before* the
+terminal `saveJob`. 0.66.0 had inserted the closing credit read between them,
+and `creditsSnapshot` goes through `apiFetch`, which has no timeout — so for
+however long that call hangs, the job was absent from the guard while still
+persisted as `running`. Those are precisely the two conditions
+`resumeOrphanedJobs()` adopts on, and the alarm fires every sixty seconds. The
+guard is now released only after the terminal state is on disk.
+
+**A test was pinning the bug.** It asserted the deregister lived in a `finally`,
+which it did — checking where the line was rather than what it meant. It now
+asserts the order instead. The new concurrency tests run the unlocked shape as
+a control and require it to lose an update, so they cannot pass vacuously.
+
+650 checks, 0 failed.
+
 ## 0.67.0 — 2026-09-07
 
 **Failures now say which kind of failure they were.**

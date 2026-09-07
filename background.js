@@ -24,6 +24,56 @@ const MEDIA = 'https://media.pixverse.ai';
 // running several accounts in parallel.
 const MAX_CONCURRENT_PER_ACCOUNT = 2;
 
+// ---------- serialised storage writes ----------
+//
+// THE BUG THIS EXISTS TO KILL. chrome.storage has no compare-and-swap. Every
+// persistent structure in this file is updated as `get → mutate → set`, and
+// `get` returns a structured clone — a private copy. So when two of those cycles
+// overlap on one key, the second writer's `get` ran before the first writer's
+// `set`, and it writes back a copy that never contained the first writer's
+// change. The first write is gone. No error is raised anywhere, by design of the
+// API: both `set` calls succeeded.
+//
+// This was not theoretical. Three separate instances were doing real damage:
+//
+//   1. verifyPending() read the WHOLE archive, probed sixty URLs eight at a time
+//      — seconds to tens of seconds of network — then wrote back the map it had
+//      read at the start. Every record a running job archived in that window was
+//      erased. The archive is the one irreplaceable thing here; it was being
+//      quietly truncated by its own integrity check.
+//
+//   2. Two concurrent jobs (MAX_CONCURRENT_PER_ACCOUNT is 2, and accounts run in
+//      parallel on top of that) clobbered each other's saveJob. A job that had
+//      finished got its 'done' record overwritten by another job's stale copy
+//      reading 'running' — whereupon resumeOrphanedJobs() adopted it and
+//      eventually settled it as "Timed out", reporting a render that succeeded
+//      as a failure. Exactly the outcome the alarm layer was built to prevent.
+//
+//   3. vaultUpsert() is called unawaited from the webRequest listener, which
+//      fires on EVERY api request — so two token captures interleave routinely.
+//      A lost vault write leaves a stale token on disk, and a stale token is
+//      what triggers the eviction path. Some of the "logged in elsewhere"
+//      ping-pong had this underneath it.
+//
+// Serialising per key is sufficient and not more than is needed. MV3 runs a
+// single service worker, so there is no writer outside this process to race
+// with; the chain only has to order the writers inside it. It does NOT make a
+// write atomic against worker death — nothing here can — but a worker killed
+// mid-cycle loses one update, which is the pre-existing situation, rather than
+// silently discarding a concurrent writer's.
+const writeChains = new Map();
+
+function withKeyLock(key, fn) {
+  const prev = writeChains.get(key) ?? Promise.resolve();
+  // Run on both settle paths: one writer throwing must not wedge the key for
+  // the rest of the session.
+  const next = prev.then(fn, fn);
+  // The stored link swallows rejections so the chain never becomes an
+  // unhandled-rejection source; the caller still sees them through `next`.
+  writeChains.set(key, next.then(() => {}, () => {}));
+  return next;
+}
+
 // ---------- auth ----------
 
 async function readAuth() {
@@ -120,8 +170,11 @@ async function readVault() {
   return v && typeof v === 'object' ? v : {};
 }
 
+// Locked: the webRequest listener calls this unawaited on every captured
+// request, so two upserts for different accounts overlap as a matter of course.
 async function vaultUpsert(auth) {
   if (!auth?.token || !auth.username) return; // only nameable accounts
+  return withKeyLock(VAULT_KEY, async () => {
   const vault = await readVault();
   const prev = vault[auth.username];
 
@@ -146,6 +199,7 @@ async function vaultUpsert(auth) {
     updatedAt: Date.now(),
   };
   await chrome.storage.local.set({ [VAULT_KEY]: vault });
+  });
 }
 
 // Accounts with a still-valid stored token, newest first — for a switcher UI.
@@ -611,18 +665,22 @@ async function readPasswords() {
 
 async function savePassword(username, password) {
   if (!username || !password) return false;
-  const all = await readPasswords();
-  all[username] = { password, savedAt: Date.now() };
-  await chrome.storage.local.set({ [PASSWORDS_KEY]: all });
-  return true;
+  return withKeyLock(PASSWORDS_KEY, async () => {
+    const all = await readPasswords();
+    all[username] = { password, savedAt: Date.now() };
+    await chrome.storage.local.set({ [PASSWORDS_KEY]: all });
+    return true;
+  });
 }
 
 async function forgetPassword(username) {
-  const all = await readPasswords();
-  if (!(username in all)) return false;
-  delete all[username];
-  await chrome.storage.local.set({ [PASSWORDS_KEY]: all });
-  return true;
+  return withKeyLock(PASSWORDS_KEY, async () => {
+    const all = await readPasswords();
+    if (!(username in all)) return false;
+    delete all[username];
+    await chrome.storage.local.set({ [PASSWORDS_KEY]: all });
+    return true;
+  });
 }
 
 // Which accounts CAN renew themselves. Names only — never the secrets.
@@ -770,11 +828,13 @@ async function reauthAccount(username, { staleToken = null } = {}) {
 
 async function vaultForget(username) {
   if (!username) return;
-  const vault = await readVault();
-  if (vault[username]) {
-    delete vault[username];
-    await chrome.storage.local.set({ [VAULT_KEY]: vault });
-  }
+  await withKeyLock(VAULT_KEY, async () => {
+    const vault = await readVault();
+    if (vault[username]) {
+      delete vault[username];
+      await chrome.storage.local.set({ [VAULT_KEY]: vault });
+    }
+  });
   // Forgetting an account must forget its password too, or "forget" would leave
   // the more dangerous half of the credentials sitting on disk.
   await forgetPassword(username);
@@ -1632,10 +1692,12 @@ async function getSweptAccounts() {
 }
 
 async function markAccountSwept(account) {
-  const swept = await getSweptAccounts();
-  if (!swept.includes(account)) {
-    await chrome.storage.local.set({ [SWEPT_KEY]: [...swept, account] });
-  }
+  await withKeyLock(SWEPT_KEY, async () => {
+    const swept = await getSweptAccounts();
+    if (!swept.includes(account)) {
+      await chrome.storage.local.set({ [SWEPT_KEY]: [...swept, account] });
+    }
+  });
 }
 
 // Toggle (or explicitly set) the starred flag on an archive record, keyed by
@@ -1644,14 +1706,19 @@ async function markAccountSwept(account) {
 // state; a no-op if the record isn't there.
 async function toggleStar(name, explicit) {
   if (!name) throw new Error('no record');
-  const map = await readArchive();
-  const rec = map[name];
-  if (!rec) return false;
+  // Locked: a star set during a sweep or a probe pass was being reverted by
+  // whichever of those wrote the archive next. A user field losing to a
+  // background task is the least defensible version of this bug.
+  return withKeyLock(ARCHIVE_KEY, async () => {
+    const map = await readArchive();
+    const rec = map[name];
+    if (!rec) return false;
 
-  rec.starred = typeof explicit === 'boolean' ? explicit : !rec.starred;
-  map[name] = rec;
-  await chrome.storage.local.set({ [ARCHIVE_KEY]: map });
-  return rec.starred;
+    rec.starred = typeof explicit === 'boolean' ? explicit : !rec.starred;
+    map[name] = rec;
+    await chrome.storage.local.set({ [ARCHIVE_KEY]: map });
+    return rec.starred;
+  });
 }
 
 async function readArchive() {
@@ -1680,6 +1747,7 @@ function archiveKeyFor(rec) {
 async function archiveMerge(records) {
   if (!records.length) return { added: 0, total: 0 };
 
+  return withKeyLock(ARCHIVE_KEY, async () => {
   const map = await readArchive();
   const now = Date.now();
   let added = 0;
@@ -1763,6 +1831,7 @@ async function archiveMerge(records) {
 
   await chrome.storage.local.set({ [ARCHIVE_KEY]: map });
   return { added, total: Object.keys(map).length };
+  });
 }
 
 // Probe a bounded number of unverified records per call, least-recently-checked
@@ -1791,27 +1860,44 @@ async function verifyPending({ max = 60 } = {}) {
   let revived = 0;
 
   // Probe in parallel — 8 at a time. In series this was the whole load stall.
-  const probed = await mapLimit(due, 8, async ([, rec]) => ({
-    rec, exists: await mediaExists(rec.url),
+  //
+  // Deliberately OUTSIDE the write lock. Sixty probes at eight concurrent is
+  // seconds to tens of seconds of network, and holding the archive lock across
+  // it would stall every running job's captureRows for that whole window —
+  // trading a correctness bug for a latency one.
+  const probed = await mapLimit(due, 8, async ([key, rec]) => ({
+    key, exists: await mediaExists(rec.url),
   }));
 
-  for (const { rec, exists } of probed) {
-    const key = archiveKeyFor(rec);
-    const wasGone = rec.status === 'gone';
-    rec.lastCheckedAt = now;
+  // Re-read under the lock and apply the verdicts to the CURRENT records rather
+  // than writing back the map read before the probe. That stale map is the whole
+  // bug: a job archiving a finished generation while this was probing had its
+  // record erased by this line, permanently. Applying per-key to a fresh read
+  // touches only what was probed and leaves concurrent writes intact.
+  await withKeyLock(ARCHIVE_KEY, async () => {
+    const fresh = await readArchive();
 
-    if (exists) {
-      rec.status = 'ok';
-      ok++;
-      if (wasGone) revived++; // we were wrong about this one; it's back
-    } else if (now - (rec.firstSeenAt ?? now) > GONE_AFTER_MS) {
-      rec.status = 'gone';
-      if (!wasGone) gone++;
+    for (const { key, exists } of probed) {
+      const rec = fresh[key];
+      if (!rec) continue; // deleted or re-keyed while we were probing
+
+      const wasGone = rec.status === 'gone';
+      rec.lastCheckedAt = now;
+
+      if (exists) {
+        rec.status = 'ok';
+        ok++;
+        if (wasGone) revived++; // we were wrong about this one; it's back
+      } else if (now - (rec.firstSeenAt ?? now) > GONE_AFTER_MS) {
+        rec.status = 'gone';
+        if (!wasGone) gone++;
+      }
+      fresh[key] = rec;
     }
-    map[key] = rec;
-  }
 
-  await chrome.storage.local.set({ [ARCHIVE_KEY]: map });
+    await chrome.storage.local.set({ [ARCHIVE_KEY]: fresh });
+  });
+
   return { checked: due.length, ok, gone, revived };
 }
 
@@ -1823,6 +1909,7 @@ async function migrateArchive() {
   const from = meta?.version ?? 0;
   if (from >= ARCHIVE_VERSION) return { migrated: 0 };
 
+  return withKeyLock(ARCHIVE_KEY, async () => {
   const map = await readArchive();
   let migrated = 0;
 
@@ -1970,6 +2057,7 @@ async function migrateArchive() {
     [ARCHIVE_META_KEY]: { version: ARCHIVE_VERSION, migratedAt: Date.now() },
   });
   return { migrated };
+  });
 }
 
 // ---------- backup / restore ----------
@@ -2022,6 +2110,7 @@ async function importArchive(data) {
     throw new Error(`Backup is from a newer version (${data.version}).`);
   }
 
+  return withKeyLock(ARCHIVE_KEY, async () => {
   const map = await readArchive();
   let added = 0;
   let merged = 0;
@@ -2078,6 +2167,7 @@ async function importArchive(data) {
 
   await chrome.storage.local.set({ [ARCHIVE_KEY]: map });
   return { added, merged, skipped, total: Object.keys(map).length };
+  });
 }
 
 // ---------- drift detection ----------
@@ -2150,18 +2240,21 @@ async function reconcileAccountTags(apiItems) {
   const account = [...names][0];
 
   const present = new Set(apiItems.map((r) => archiveKeyFor(r)).filter(Boolean));
-  const map = await readArchive();
   let cleared = 0;
 
-  for (const [key, rec] of Object.entries(map)) {
-    if (!rec.accounts?.includes(account)) continue;
-    if (present.has(key)) continue; // genuinely this account's
-    rec.accounts = rec.accounts.filter((a) => a !== account);
-    map[key] = rec;
-    cleared++;
-  }
+  await withKeyLock(ARCHIVE_KEY, async () => {
+    const map = await readArchive();
 
-  if (cleared) await chrome.storage.local.set({ [ARCHIVE_KEY]: map });
+    for (const [key, rec] of Object.entries(map)) {
+      if (!rec.accounts?.includes(account)) continue;
+      if (present.has(key)) continue; // genuinely this account's
+      rec.accounts = rec.accounts.filter((a) => a !== account);
+      map[key] = rec;
+      cleared++;
+    }
+
+    if (cleared) await chrome.storage.local.set({ [ARCHIVE_KEY]: map });
+  });
   return { account, cleared };
 }
 
@@ -3060,13 +3153,30 @@ async function run({ record, job }) {
     // The interesting measurement. A submit rejected on content grounds lands
     // here, and whether the balance moved is the whole question.
     record.creditsAtFailure = await creditsSnapshot(auth0);
-  } finally {
-    runningJobIds.delete(record.id);
   }
 
+  // The final balance and the settle, THEN release the guard.
+  //
+  // These three lines used to sit after a `finally` that deleted the id, which
+  // opened a window with two properties that combine badly: the job is no longer
+  // in runningJobIds, and its persisted state still reads 'running' because the
+  // save below has not happened yet. resumeOrphanedJobs() checks exactly those
+  // two things, and the alarm fires every 60 seconds.
+  //
+  // The window is not short. creditsSnapshot() goes through apiFetch(), which
+  // has no timeout of its own, so a hung request holds it open for as long as
+  // Chrome's network stack allows — minutes. Land the alarm in there and a job
+  // that has already finished gets adopted by a second poller, whose own diff
+  // finds nothing and which eventually writes "Timed out" over a completed
+  // render.
+  //
+  // No try/finally needed: creditsSnapshot never throws by construction, and
+  // saveJob's failure modes are storage-level, in which case the id staying in
+  // the set until the worker dies is the safe direction to fail.
   record.creditsFinal = await creditsSnapshot(auth0);
   record.settledAt = Date.now();
   await saveJob(record);
+  runningJobIds.delete(record.id);
 }
 
 // Balance, or null. Never throws and never blocks a job: a job must not fail
@@ -3253,11 +3363,19 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 chrome.runtime.onStartup.addListener(() => { ensureJobAlarm(); resumeOrphanedJobs(); });
 ensureJobAlarm();
 
+// Locked on 'jobs'. Two jobs run per account and accounts run in parallel, so
+// concurrent saveJob calls are the normal case, not an edge one — and an
+// unlocked read-modify-write here meant one job's terminal 'done' record could
+// be overwritten by another job's stale copy still reading 'running'. The alarm
+// resumer then adopted that job and settled it as a timeout: a finished render
+// reported as failed, which is the single worst thing this extension can say.
 async function saveJob(record) {
-  const { jobs = [] } = await chrome.storage.local.get('jobs');
-  const idx = jobs.findIndex((j) => j.id === record.id);
-  if (idx >= 0) jobs[idx] = record; else jobs.unshift(record);
-  await chrome.storage.local.set({ jobs: jobs.slice(0, 60) });
+  await withKeyLock('jobs', async () => {
+    const { jobs = [] } = await chrome.storage.local.get('jobs');
+    const idx = jobs.findIndex((j) => j.id === record.id);
+    if (idx >= 0) jobs[idx] = record; else jobs.unshift(record);
+    await chrome.storage.local.set({ jobs: jobs.slice(0, 60) });
+  });
   broadcast({ type: 'job/update', job: record });
   // A finished render changed the balance — tell the panel to re-pull.
   if (record.state === 'done' || record.state === 'failed') {
