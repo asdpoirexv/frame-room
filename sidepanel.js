@@ -22,9 +22,12 @@ function frDebug(msg) {
 // 4087-record archive, where `model` is what the SERVER echoed back.
 const MODELS = {
   image: ['qwen-image', 'seedream-4.0', 'seedream-4.5', 'seedream-5.0-lite', 'seedream-5.0-pro'],
-  animate: ['v6', 'pixverse-c1', 'v5.6', 'v5'],
-  frames: ['v6', 'pixverse-c1', 'v5.6', 'v5'],
+  animate: ['v6', 'pixverse-c1', 'v5.6'],
+  frames: ['v6', 'pixverse-c1', 'v5.6'],
 };
+// 2026-10-06: `v5` removed. PixVerse refuses it with ErrCode 400039, "model
+// deprecated" (first seen 2026-09-27). Old archive records still carry the id,
+// so MODEL_DISPLAY_NAME in background.js keeps its entry.
 
 // Read off the live dropdowns on 2026-09-02 (NOTES 1.14e). Two corrections to
 // what was here before, both checkable: `v4.5` exists nowhere — not the

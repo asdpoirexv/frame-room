@@ -7,7 +7,7 @@ so none of it has to be rediscovered.
 
 Written to be read cold, months later, by someone who has forgotten all of it.
 
-Last updated: 2026-09-05. Sections gain a stamp when they change materially.
+Last updated: 2026-10-06. Sections gain a stamp when they change materially.
 
 ---
 
@@ -88,15 +88,22 @@ PixVerse percent-encodes slashes in URLs — `.../upload%2F<uuid>.jpg`.
 Getting this backwards in either direction is a silent failure. Keep the two
 helpers distinct.
 
-### 1.6 The CDN blocks direct `<video src>`
+### 1.6 Direct `<video src>` failed — the URL, not the CDN (corrected 2026-10-06)
 
-Returns `MEDIA_ERR_SRC_NOT_SUPPORTED` (code 4). Workaround: `fetch()` the bytes
-(CORS-exempt inside the extension thanks to `host_permissions`) and play from a
-blob URL.
+This section used to be titled "The CDN blocks direct `<video src>`". That was
+wrong. Early builds saw `MEDIA_ERR_SRC_NOT_SUPPORTED` (code 4) and blamed the
+CDN; the cause was the URL. The API returns media URLs with `%2F` in place of
+the slashes (1.5), `<video src>` does not decode them, and an address bar does,
+so the same URL "worked in a tab" (CHANGELOG 0.11.0).
 
-**This is the normal path for every video, not an error.** An early build logged
-it at `warn`, which made healthy playback fill the extension's Errors tab. It's
-`console.debug` now, behind `FR_DEBUG`.
+Re-measured 2026-10-06: a ranged GET to `media.pixverse.ai` from a
+`chrome-extension://` origin answers `206`, `content-type: video/mp4`,
+`access-control-allow-origin: *`. A decoded URL plays directly.
+
+The blob rescue (`fetch()` the bytes, play from a blob URL) stays as a safety
+net. It is harmless, but it is not why playback works. If it fires for every
+video, suspect the URL spelling first. It logs at `console.debug`, behind
+`FR_DEBUG`, so a rescue never fills the extension's Errors tab.
 
 ### 1.7 The library list has a date filter — and it's why history "disappears"
 
@@ -1225,6 +1232,13 @@ Node is different. `tools/scan-local.js` keeps a ranged GET because there is no
 CORS there and it avoids pulling whole files. The two are deliberately not
 unified.
 
+**Re-measured 2026-10-06:** the CDN now answers a `Range` preflight (`200`,
+`access-control-allow-headers: *`, from a `chrome-extension://` origin and from
+a web origin alike), and a direct `<video src>` plays a decoded URL (1.6).
+Whether the CDN behaved differently in September or the probe failed for
+another reason is not known. The rule stands on its own: the bare GET is the
+request this code has already proven.
+
 ### 2.5 Browse memory model
 
 Full-viewport scroll-snap feed, but only the focused card holds a `<video>` with
@@ -1305,8 +1319,11 @@ second poller for a job already in flight, and anything past its own
 **History floor** — the deep sweep bottoms out at Jan 2023, a guess rather than
 the real account start date. Too early only costs a few empty window requests.
 
-**`MODELS` list** in `sidepanel.js` is a placeholder; real options should be read
-off the site's dropdown.
+**`MODELS` list** — **done 2026-09-02**: read off the live dropdowns (1.14e) and
+checked against the official CLI (1.14j). It is still hardcoded, so it goes
+stale: `v5` was dropped on 2026-10-06 because PixVerse now refuses it with
+ErrCode 400039, "model deprecated" (first seen 2026-09-27). 400039 is the signal
+to prune an id here.
 
 **Origin checks** — if the API starts 403-ing it's validating `Origin`/`Referer`
 and seeing `chrome-extension://…`. Flip `TRANSPORT` to `'page'` in

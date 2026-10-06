@@ -101,11 +101,14 @@ deliberate trade for convenience with 4–5 accounts, and it means:
   change forces the anon-id to null until the new session's is captured.
 - Don't load this build on a shared or untrusted machine.
 
-**Fetches run in the service worker, not the page.** An extension with
-`host_permissions` for `app-api.pixverse.ai` is exempt from the CORS check.
-Those custom headers (`token`, `workspace-id`, `x-platform`) force a preflight,
-which is exactly what would have killed this code in a normal web app on your
-own origin.
+**Fetches run in the service worker, not the page.** It keeps the token and
+every network call in one place. *Corrected 2026-10-06:* this paragraph used to
+say the custom headers (`token`, `workspace-id`, `x-platform`) force a preflight
+that would kill this code in a normal web app on your own origin. They do force
+one, but it passes: the API answers any origin's preflight with
+`access-control-allow-origin: *` and `access-control-allow-headers: *`, and the
+media CDN and the upload bucket allow any origin too. Being an extension is not
+what makes the calls possible.
 
 **Results are found by diffing, not by `items[0]`.** Your `listImages()` returns
 the newest asset, which is only your asset if nothing else is in flight — it
@@ -265,8 +268,10 @@ captured payloads field-for-field. Two things in there are still inferred:
   sent `1`, an animate capture sent `0`, and what it switches isn't known. A
   rerun sends back whatever the original record carried.
 
-`MODELS` in `sidepanel.js` is a placeholder list. Read the real options off the
-model dropdown on the site.
+`MODELS` in `sidepanel.js` was read off the live dropdowns (2026-09-02) and
+checked against PixVerse's own CLI (NOTES 1.14e, 1.14j). It is still a
+hardcoded list, so it goes stale: `v5` was removed on 2026-10-06 because
+PixVerse now refuses it with ErrCode 400039, "model deprecated".
 
 The deep history sweep bottoms out at a **2023 floor** — a guess, not your
 actual account start date. Too early only costs a few empty requests; set

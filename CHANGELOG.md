@@ -9,6 +9,25 @@ would be worse than leaving them blank.
 the fact, in two sittings rather than as each change landed, and the times were
 not recorded. Inventing them would break the rule directly above.
 
+## 0.68.1 — 2026-10-06 20:10 IST
+
+**`v5` is gone from the model list, and three claims in the docs were wrong.**
+
+- `v5` removed from the animate and frames lists. PixVerse refuses it now with
+  ErrCode 400039, "model deprecated" (first seen 2026-09-27). The display-name
+  table keeps its entry, because old archive records still carry the id.
+- The README, NOTES 1.6, NOTES 2.4d and the `background.js` header said that the
+  media CDN refuses a direct `<video src>` and a `Range` preflight, and that a
+  normal web page would die on the API's preflight. Re-measured: the API answers
+  any origin's preflight with `access-control-allow-origin: *` and
+  `access-control-allow-headers: *`; the CDN answers a `Range` preflight the same
+  way and serves `206 video/mp4` with `access-control-allow-origin: *`; the
+  upload bucket allows any origin too. The code 4 failures were the `%2F` URL
+  spelling (0.11.0). No code depended on the wrong claims, and the blob rescue
+  stays as a safety net. Older entries below are left as written.
+- NOTES section 4 still called `MODELS` a placeholder. It was read off the live
+  dropdowns on 2026-09-02.
+
 ## 0.68.0 — 2026-09-07
 
 **Every storage write was a lost-update race. The archive was deleting itself.**

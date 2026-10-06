@@ -1263,6 +1263,8 @@ async function stashRerun(item, linkEl) {
 // plays videos while this page didn't: a direct <video src> to the CDN gets
 // refused (MEDIA_ERR_SRC_NOT_SUPPORTED), but an extension page holds
 // host_permissions for media.pixverse.ai, so fetch() from here is CORS-exempt.
+// (Corrected 2026-10-06, NOTES 1.6: the refusal was the %2F URL spelling, not
+// the CDN. A decoded URL plays directly; this stays as a safety net.)
 //
 // Memory: exactly one blob is alive at a time — detach() revokes it — so this
 // keeps the single-video-in-flight model intact.

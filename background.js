@@ -1,9 +1,10 @@
 // background.js — the only place that touches the network or the token.
 //
-// Why here and not in the panel: an MV3 extension page/service worker with
-// host_permissions for the target host is exempt from the CORS check. A plain
-// web page on your own origin is not — that's why your snippet would die on
-// preflight if you dropped it into a localhost app.
+// Why here and not in the panel: one place holds the token and makes every call.
+// An MV3 extension page/service worker with host_permissions for the target host
+// is exempt from the CORS check. (Corrected 2026-10-06: a plain web page would
+// not die on preflight either. The API answers any origin's preflight with
+// access-control-allow-origin and -allow-headers `*`. README, NOTES 1.6.)
 //
 // TRANSPORT FALLBACK: if the API starts 403-ing because it validates the
 // Origin/Referer header (it now sees chrome-extension://...), don't fight it
